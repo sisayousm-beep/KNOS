@@ -4,12 +4,15 @@ import './styles/tokens.css';
 import './styles/components.css';
 import './styles/app.css';
 import { DocsProvider } from './store.jsx';
+import { WorkflowsProvider } from './workflow.jsx';
 import App from './App.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <DocsProvider>
-      <App />
+      <WorkflowsProvider>
+        <App />
+      </WorkflowsProvider>
     </DocsProvider>
   </StrictMode>,
 );

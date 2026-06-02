@@ -1,215 +1,228 @@
-// Knowledge OS — Workflow Builder view (Phase 5 preview)
-// Trigger / Action / AI / Condition nodes on a canvas, draggable.
-import { useState, useRef } from 'react';
+// Knowledge OS — Workflow Builder (Phase 5: Trigger → Action[])
+// A real automation manager: define workflows, toggle them on, run them
+// manually, and watch the run log. Execution + triggers live in
+// workflow.jsx (store/runtime) and engine.js (action executors).
+import { useState } from 'react';
 import { Icon } from '../icons.jsx';
+import { useWorkflows } from '../workflow.jsx';
+import { useDocs } from '../store.jsx';
+import { ACTION_TYPES, TRIGGER_TYPES } from '../engine.js';
+import { uid, relativeTime } from '../util.js';
 
-const NODE_KINDS = {
-  trigger:   { color: 'var(--success)', bg: 'var(--success-bg)', icon: 'bolt', label: 'TRIGGER' },
-  ai:        { color: 'var(--accent)', bg: 'var(--accent-bg)', icon: 'sparkles', label: 'AI' },
-  action:    { color: 'var(--text-secondary)', bg: 'var(--surface-secondary)', icon: 'play', label: 'ACTION' },
-  condition: { color: 'var(--warning)', bg: 'var(--warning-bg)', icon: 'branch', label: 'CONDITION' },
-  output:    { color: 'var(--info)', bg: 'var(--info-bg)', icon: 'webhook', label: 'OUTPUT' },
+const TRIGGER_META = {
+  DocumentCreated: { icon: 'doc', label: '문서 생성됨', tone: 'success' },
+  DocumentUpdated: { icon: 'save', label: '문서 수정됨', tone: 'success' },
+  TagAdded:        { icon: 'hash', label: '태그 추가됨', tone: 'success' },
+  DailySchedule:   { icon: 'calendar', label: '매일 스케줄', tone: 'warning' },
+  Manual:          { icon: 'play', label: '수동 실행', tone: 'accent' },
 };
-
-const INITIAL_NODES = [
-  { id: 'n1', kind: 'trigger', x: 60, y: 200, title: 'Document Created', sub: 'on new document', io: 'DocumentCreated' },
-  { id: 'n2', kind: 'ai', x: 320, y: 120, title: 'AI Summarize', sub: 'Gemini Flash', io: 'Summarize' },
-  { id: 'n3', kind: 'ai', x: 320, y: 280, title: 'Generate Tags', sub: 'auto-categorize', io: 'GenerateTag' },
-  { id: 'n4', kind: 'condition', x: 600, y: 200, title: 'If tags ≥ 3', sub: 'branch condition', io: 'Condition' },
-  { id: 'n5', kind: 'action', x: 860, y: 120, title: 'Connect Graph', sub: 'link related docs', io: 'GraphConnect' },
-  { id: 'n6', kind: 'output', x: 860, y: 280, title: 'Send Webhook', sub: 'POST /notify', io: 'SendWebhook' },
-];
-const CONNECTIONS = [['n1', 'n2'], ['n1', 'n3'], ['n2', 'n4'], ['n3', 'n4'], ['n4', 'n5'], ['n4', 'n6']];
-const NODE_W = 188, NODE_H = 74;
-
-function paletteItems(kind) {
-  return ({
-    trigger: ['Document Created', 'Tag Added', 'Schedule'],
-    ai: ['Summarize', 'Generate Tags', 'Ask AI'],
-    action: ['Connect Graph', 'Run Script'],
-    condition: ['If / Else'],
-    output: ['Webhook', 'Git Sync'],
-  })[kind] || [];
-}
+const ACTION_META = {
+  Summarize:   { icon: 'sparkles', label: 'AI 요약', desc: '대상 문서를 요약해 저장' },
+  GenerateTag: { icon: 'hash', label: 'AI 태그', desc: '문서에 태그 자동 추가' },
+  CallAI:      { icon: 'ai', label: 'AI 질문', desc: '지식베이스에 질의 (RAG)' },
+  SendWebhook: { icon: 'webhook', label: '웹훅 전송', desc: '외부 URL로 POST' },
+  RunScript:   { icon: 'code', label: '스크립트', desc: '스크립트 기록 (샌드박스)' },
+};
+const STATUS_BADGE = { ok: 'badge-success', err: 'badge-error', skip: 'badge-warning' };
 
 export default function WorkflowBuilder() {
-  const [nodes, setNodes] = useState(INITIAL_NODES);
-  const [sel, setSel] = useState('n2');
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [running, setRunning] = useState(false);
-  const [activeEdge, setActiveEdge] = useState(-1);
-  const wrapRef = useRef(null);
+  const { defs, runs, createWorkflow, updateWorkflow, deleteWorkflow, runNow, hasKey } = useWorkflows();
+  const { docs } = useDocs();
+  const [selId, setSelId] = useState(null);
+  const [targetId, setTargetId] = useState(null);
+  const [runningId, setRunningId] = useState(null);
 
-  function dragNode(e, id) {
-    e.stopPropagation();
-    setSel(id);
-    const start = { x: e.clientX, y: e.clientY };
-    const node = nodes.find((n) => n.id === id); const o = { x: node.x, y: node.y };
-    const move = (ev) => setNodes((ns) => ns.map((n) => n.id === id ? { ...n, x: o.x + (ev.clientX - start.x), y: o.y + (ev.clientY - start.y) } : n));
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  const sel = defs.find((w) => w.id === selId) ?? defs[0] ?? null;
+  const targetDoc = docs.find((d) => d.id === targetId) ?? docs[0] ?? null;
+
+  function addAction(wf, type) {
+    updateWorkflow(wf.id, { actions: [...wf.actions, { id: uid('a'), type, config: {} }] });
   }
-  function dragCanvas(e) {
-    const start = { x: e.clientX, y: e.clientY }, p0 = { ...pan };
-    const move = (ev) => setPan({ x: p0.x + (ev.clientX - start.x), y: p0.y + (ev.clientY - start.y) });
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  function removeAction(wf, aid) {
+    updateWorkflow(wf.id, { actions: wf.actions.filter((a) => a.id !== aid) });
   }
-  function runFlow() {
-    if (running) return;
-    setRunning(true); setActiveEdge(0);
-    let i = 0;
-    const tick = () => {
-      i++;
-      if (i >= CONNECTIONS.length) { setActiveEdge(-1); setRunning(false); return; }
-      setActiveEdge(i); setTimeout(tick, 480);
-    };
-    setTimeout(tick, 480);
+  function patchConfig(wf, aid, configPatch) {
+    updateWorkflow(wf.id, {
+      actions: wf.actions.map((a) => a.id === aid ? { ...a, config: { ...a.config, ...configPatch } } : a),
+    });
+  }
+  async function doRun(wf) {
+    setRunningId(wf.id);
+    try { await runNow(wf.id, targetDoc); } finally { setRunningId(null); }
+  }
+  function remove(wf) {
+    deleteWorkflow(wf.id);
+    if (sel?.id === wf.id) setSelId(null);
   }
 
-  const nodeById = (id) => nodes.find((n) => n.id === id);
-  const selNode = nodeById(sel);
-
-  function edgePath(a, b) {
-    const x1 = a.x + NODE_W, y1 = a.y + NODE_H / 2, x2 = b.x, y2 = b.y + NODE_H / 2;
-    const dx = Math.max(40, (x2 - x1) / 2);
-    return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
-  }
+  const selRuns = sel ? runs.filter((r) => r.workflowId === sel.id) : runs;
 
   return (
     <div style={{ display: 'flex', height: '100%', minHeight: 0 }}>
-      <div style={{ width: 208, flex: 'none', borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', overflow: 'auto' }}>
-        <div style={{ padding: '14px 14px 10px' }}><div className="section-label">Node Library</div></div>
-        {Object.entries(NODE_KINDS).map(([k, v]) => (
-          <div key={k} style={{ padding: '0 10px 8px' }}>
-            <div className="section-label" style={{ fontSize: 10, padding: '8px 4px 4px', color: v.color }}>{v.label}</div>
-            {paletteItems(k).map((it) => (
-              <div key={it} className="list-row" style={{ padding: '7px 8px', marginBottom: 2, cursor: 'grab' }}>
-                <span style={{ width: 24, height: 24, borderRadius: 6, display: 'grid', placeItems: 'center', background: v.bg, color: v.color, flex: 'none' }}>
-                  <Icon name={v.icon} size={13} />
-                </span>
-                <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>{it}</span>
-                <Icon name="plus" size={12} style={{ marginLeft: 'auto', color: 'var(--text-tertiary)' }} />
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <div style={{ height: 46, flex: 'none', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', background: 'var(--bg-secondary)' }}>
-          <Icon name="workflow" size={15} style={{ color: 'var(--text-tertiary)' }} />
-          <span style={{ fontSize: 'var(--text-md)', fontWeight: 600 }}>Auto-organize new docs</span>
-          <span className="badge badge-success" style={{ height: 20 }}><span className="dot"></span>Active</span>
-          <div style={{ flex: 1 }}></div>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>142 runs · 99.2% success</span>
-          <button className="btn btn-sm"><Icon name="clock" size={13} />History</button>
-          <button className="btn btn-primary btn-sm" onClick={runFlow} disabled={running}>
-            {running ? <><span className="spinner" style={{ width: 12, height: 12 }}></span>Running…</> : <><Icon name="play" size={12} />Test Run</>}
+      {/* ── Workflow list ───────────────────────────────────────── */}
+      <div style={{ width: 240, flex: 'none', borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '14px 12px 8px', display: 'flex', alignItems: 'center' }}>
+          <div className="section-label" style={{ flex: 1 }}>Workflows · {defs.length}</div>
+          <button className="btn btn-icon btn-sm btn-ghost" title="새 워크플로우" onClick={() => setSelId(createWorkflow())}>
+            <Icon name="plus" size={14} />
           </button>
         </div>
-
-        <div ref={wrapRef} onPointerDown={dragCanvas}
-          style={{ flex: 1, position: 'relative', overflow: 'hidden', cursor: 'grab', background: 'var(--bg-primary)', backgroundImage: 'radial-gradient(var(--dot-grid) 1px, transparent 1px)', backgroundSize: '24px 24px', backgroundPosition: `${pan.x}px ${pan.y}px` }}>
-          <div style={{ position: 'absolute', left: pan.x, top: pan.y, width: 0, height: 0 }}>
-            <svg style={{ position: 'absolute', overflow: 'visible', pointerEvents: 'none' }} width="1" height="1">
-              {CONNECTIONS.map((c, i) => {
-                const a = nodeById(c[0]), b = nodeById(c[1]); if (!a || !b) return null;
-                const on = running && i <= activeEdge;
-                return <path key={i} d={edgePath(a, b)} fill="none"
-                  stroke={on ? 'var(--accent)' : 'var(--border-strong)'} strokeWidth={on ? 2.4 : 1.6}
-                  strokeDasharray={on ? '6 4' : 'none'} style={{ transition: 'stroke .2s' }}>
-                  {on && <animate attributeName="stroke-dashoffset" from="20" to="0" dur="0.6s" repeatCount="indefinite" />}
-                </path>;
-              })}
-            </svg>
-            {nodes.map((n) => {
-              const k = NODE_KINDS[n.kind]; const isSel = n.id === sel;
-              const isActive = running && CONNECTIONS.slice(0, activeEdge + 1).some((c) => c[1] === n.id || c[0] === n.id);
-              return (
-                <div key={n.id} onPointerDown={(e) => dragNode(e, n.id)}
-                  style={{ position: 'absolute', left: n.x, top: n.y, width: NODE_W, height: NODE_H, background: 'var(--surface-primary)', border: `1px solid ${isSel ? 'var(--accent)' : 'var(--border-default)'}`, borderRadius: 'var(--radius-lg)', boxShadow: isSel ? '0 0 0 3px var(--accent-glow), var(--shadow-md)' : 'var(--shadow-sm)', cursor: 'grab', userSelect: 'none', transition: 'box-shadow .15s, border-color .15s', outline: isActive ? '2px solid var(--accent)' : 'none', outlineOffset: 2 }}>
-                  {n.kind !== 'trigger' && <span style={{ position: 'absolute', left: -5, top: NODE_H / 2 - 5, width: 10, height: 10, borderRadius: '50%', background: 'var(--bg-primary)', border: '2px solid var(--border-strong)' }}></span>}
-                  {n.kind !== 'output' && <span style={{ position: 'absolute', right: -5, top: NODE_H / 2 - 5, width: 10, height: 10, borderRadius: '50%', background: 'var(--bg-primary)', border: `2px solid ${k.color}` }}></span>}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 13px' }}>
-                    <span style={{ width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center', background: k.bg, color: k.color, flex: 'none' }}>
-                      <Icon name={k.icon} size={16} />
-                    </span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', color: k.color, marginBottom: 2 }}>{k.label}</div>
-                      <div style={{ fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.sub}</div>
-                    </div>
-                  </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: '0 8px 8px' }}>
+          {defs.map((w) => {
+            const tm = TRIGGER_META[w.trigger];
+            const active = sel?.id === w.id;
+            return (
+              <div key={w.id} onClick={() => setSelId(w.id)} className="list-row"
+                style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6, padding: '10px 11px', marginBottom: 4, background: active ? 'var(--accent-bg)' : 'var(--surface-primary)', border: `1px solid ${active ? 'var(--accent)' : 'var(--border-subtle)'}`, borderRadius: 'var(--radius-md)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', flex: 'none', background: w.enabled ? 'var(--success)' : 'var(--text-tertiary)' }}></span>
+                  <span style={{ flex: 1, fontSize: 'var(--text-base)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</span>
                 </div>
-              );
-            })}
-          </div>
-
-          <div style={{ position: 'absolute', bottom: 14, left: 14, fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', padding: '6px 10px', background: 'var(--surface-primary)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}>
-            노드를 드래그하세요 · 캔버스를 끌어 이동 · Test Run으로 실행 미리보기 (Phase 5)
-          </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className={`badge badge-${tm.tone}`} style={{ height: 18 }}><Icon name={tm.icon} size={10} />{tm.label}</span>
+                  <span style={{ flex: 1 }}></span>
+                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{w.actions.length}동작 · {w.stats?.runs || 0}회</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <div style={{ width: 288, flex: 'none', borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', overflow: 'auto' }}>
-        {selNode && <>
-          <div style={{ padding: '16px', borderBottom: '1px solid var(--border-subtle)' }}>
-            <div className="section-label" style={{ marginBottom: 12 }}>Node Config</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ width: 36, height: 36, borderRadius: 9, display: 'grid', placeItems: 'center', background: NODE_KINDS[selNode.kind].bg, color: NODE_KINDS[selNode.kind].color, flex: 'none' }}>
-                <Icon name={NODE_KINDS[selNode.kind].icon} size={18} />
-              </span>
-              <div>
-                <div style={{ fontSize: 'var(--text-md)', fontWeight: 600 }}>{selNode.title}</div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{selNode.io}</div>
-              </div>
+      {/* ── Editor ─────────────────────────────────────────────── */}
+      <div style={{ flex: 1, minWidth: 0, overflow: 'auto', background: 'var(--bg-primary)' }}>
+        {!sel ? (
+          <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-tertiary)' }}>
+            <div style={{ textAlign: 'center' }}>
+              <Icon name="workflow" size={32} style={{ color: 'var(--text-tertiary)' }} />
+              <div style={{ marginTop: 10, fontSize: 'var(--text-md)' }}>워크플로우를 선택하거나 새로 만드세요</div>
             </div>
           </div>
-          <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div>
-              <label className="label">Label</label>
-              <input className="input" defaultValue={selNode.title} />
+        ) : (
+          <div style={{ maxWidth: 640, margin: '0 auto', padding: '20px 24px 48px' }}>
+            {/* header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+              <input className="input" value={sel.name} onChange={(e) => updateWorkflow(sel.id, { name: e.target.value })}
+                style={{ flex: 1, fontSize: 'var(--text-lg)', fontWeight: 600 }} />
+              <label className="switch" title={sel.enabled ? '활성' : '비활성'}>
+                <input type="checkbox" checked={sel.enabled} onChange={(e) => updateWorkflow(sel.id, { enabled: e.target.checked })} />
+                <span className="track"></span><span className="thumb"></span>
+              </label>
+              <button className="btn btn-icon btn-sm btn-ghost" title="삭제" onClick={() => remove(sel)}><Icon name="trash" size={14} /></button>
             </div>
-            {selNode.kind === 'ai' && <>
-              <div>
-                <label className="label">Model</label>
-                <div className="segmented" style={{ width: '100%' }}>
-                  <button className="active" style={{ flex: 1 }}>Flash</button><button style={{ flex: 1 }}>Pro</button><button style={{ flex: 1 }}>Local</button>
-                </div>
+
+            {!hasKey && (
+              <div className="card" style={{ padding: '9px 12px', marginBottom: 16, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
+                Gemini 키 없음 → AI 동작은 로컬 휴리스틱으로 실행됩니다. (설정에서 키 입력 가능)
               </div>
-              <div>
-                <label className="label">Prompt</label>
-                <textarea className="input" defaultValue="이 문서를 3문장으로 요약하고 핵심 개념을 추출해줘." />
-              </div>
-            </>}
-            {selNode.kind === 'condition' && <>
-              <div>
-                <label className="label">Field</label>
-                <input className="input mono" defaultValue="tags.length" />
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input className="input mono" defaultValue="≥" style={{ width: 60, textAlign: 'center' }} />
-                <input className="input mono" defaultValue="3" />
-              </div>
-            </>}
-            {selNode.kind === 'output' && <div>
-              <label className="label">Webhook URL</label>
-              <input className="input mono" defaultValue="https://api.notify/v1" />
-            </div>}
-            {selNode.kind === 'trigger' && <div>
-              <label className="label">Event</label>
-              <div className="card" style={{ padding: '9px 11px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', color: 'var(--success)' }}>{selNode.io}</div>
-            </div>}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
-              <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>Enabled</span>
-              <label className="switch"><input type="checkbox" defaultChecked /><span className="track"></span><span className="thumb"></span></label>
+            )}
+
+            {/* TRIGGER */}
+            <div className="section-label" style={{ marginBottom: 8 }}>Trigger · 시작 조건</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 22 }}>
+              {TRIGGER_TYPES.map((t) => {
+                const tm = TRIGGER_META[t]; const on = sel.trigger === t;
+                return (
+                  <button key={t} onClick={() => updateWorkflow(sel.id, { trigger: t })}
+                    className="btn btn-sm" style={{ borderColor: on ? 'var(--accent)' : undefined, background: on ? 'var(--accent-bg)' : undefined, color: on ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                    <Icon name={tm.icon} size={13} style={{ color: on ? 'var(--accent)' : 'var(--text-tertiary)' }} />{tm.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ACTIONS */}
+            <div className="section-label" style={{ marginBottom: 8 }}>Actions · 순차 실행 ({sel.actions.length})</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {sel.actions.map((a, i) => {
+                const am = ACTION_META[a.type];
+                return (
+                  <div key={a.id} className="card" style={{ padding: '12px 13px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                      <span style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center', background: 'var(--accent-bg)', color: 'var(--accent)', flex: 'none' }}>
+                        <Icon name={am?.icon || 'play'} size={14} />
+                      </span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 'var(--text-base)', fontWeight: 500 }}>{i + 1}. {am?.label || a.type}</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{am?.desc}</div>
+                      </div>
+                      <button className="btn btn-icon btn-sm btn-ghost" title="동작 삭제" onClick={() => removeAction(sel, a.id)}><Icon name="x" size={13} /></button>
+                    </div>
+                    {a.type === 'CallAI' && (
+                      <textarea className="input" placeholder="AI에게 보낼 질문" value={a.config.prompt || ''}
+                        onChange={(e) => patchConfig(sel, a.id, { prompt: e.target.value })} style={{ marginTop: 10, minHeight: 52 }} />
+                    )}
+                    {a.type === 'SendWebhook' && (
+                      <input className="input mono" placeholder="https://example.com/hook" value={a.config.url || ''}
+                        onChange={(e) => patchConfig(sel, a.id, { url: e.target.value })} style={{ marginTop: 10 }} />
+                    )}
+                    {a.type === 'RunScript' && (
+                      <textarea className="input mono" placeholder="echo hello" value={a.config.script || ''}
+                        onChange={(e) => patchConfig(sel, a.id, { script: e.target.value })} style={{ marginTop: 10, minHeight: 52 }} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* add action */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+              {ACTION_TYPES.map((t) => (
+                <button key={t} className="btn btn-sm btn-ghost" onClick={() => addAction(sel, t)}>
+                  <Icon name="plus" size={11} />{ACTION_META[t].label}
+                </button>
+              ))}
+            </div>
+
+            {/* run bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--border-subtle)' }}>
+              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', flex: 'none' }}>대상</span>
+              <select className="input" value={targetDoc?.id || ''} onChange={(e) => setTargetId(e.target.value)} style={{ flex: 1, minWidth: 0 }}>
+                {docs.length === 0 && <option value="">문서 없음</option>}
+                {docs.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+              </select>
+              <button className="btn btn-primary" disabled={runningId === sel.id || !sel.actions.length} onClick={() => doRun(sel)}>
+                {runningId === sel.id
+                  ? <><span className="spinner" style={{ width: 13, height: 13 }}></span>실행 중…</>
+                  : <><Icon name="play" size={13} />지금 실행</>}
+              </button>
             </div>
           </div>
-          <div style={{ padding: '0 16px 16px' }}>
-            <button className="btn btn-danger btn-sm" style={{ width: '100%' }}><Icon name="trash" size={12} />노드 삭제</button>
-          </div>
-        </>}
+        )}
+      </div>
+
+      {/* ── Run log ─────────────────────────────────────────────── */}
+      <div style={{ width: 312, flex: 'none', borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '14px 14px 8px' }}>
+          <div className="section-label">Run Log {sel && `· ${sel.name}`}</div>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: '0 12px 12px' }}>
+          {selRuns.length === 0 && (
+            <div style={{ padding: '24px 8px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
+              아직 실행 기록이 없습니다.<br />“지금 실행”으로 테스트하세요.
+            </div>
+          )}
+          {selRuns.map((r) => (
+            <div key={r.id} className="card" style={{ padding: '11px 12px', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                <span className={`badge ${r.ok ? 'badge-success' : 'badge-error'}`} style={{ height: 18 }}>
+                  <Icon name={r.ok ? 'check' : 'x'} size={10} />{r.ok ? '성공' : '실패'}
+                </span>
+                <span style={{ flex: 1, fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{r.trigger}</span>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{relativeTime(r.at)}</span>
+              </div>
+              {r.docTitle && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginBottom: 6 }}>📄 {r.docTitle}</div>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {r.steps.map((s, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 6, fontSize: 11 }}>
+                    <span className={`badge ${STATUS_BADGE[s.status] || 'badge-warning'}`} style={{ height: 15, flex: 'none' }}>{s.type}</span>
+                    <span style={{ color: 'var(--text-tertiary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.detail}>{s.detail}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

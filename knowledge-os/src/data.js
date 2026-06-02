@@ -200,6 +200,30 @@ export const ACTIVITY = [
   { type: 'workflow', icon: 'workflow', text: '워크플로우 <b>On Document Created</b>가 실행되었습니다', meta: '4 actions · 성공', time: '어제' },
 ];
 
+// Phase 5 — starter workflow definitions (real, executable by the engine).
+// Seeded disabled so launching the app never fires AI calls unexpectedly;
+// toggle one on, or use "지금 실행" to test against a chosen document.
+export const SEED_WORKFLOWS = [
+  {
+    id: 'wf-organize', name: 'Auto-organize new docs', enabled: false, trigger: 'DocumentCreated',
+    actions: [
+      { id: 'wf-organize-a1', type: 'Summarize', config: {} },
+      { id: 'wf-organize-a2', type: 'GenerateTag', config: {} },
+    ],
+    stats: { runs: 0, success: 0, lastRun: null },
+  },
+  {
+    id: 'wf-ontag', name: 'Summarize on tag', enabled: false, trigger: 'TagAdded',
+    actions: [{ id: 'wf-ontag-a1', type: 'Summarize', config: {} }],
+    stats: { runs: 0, success: 0, lastRun: null },
+  },
+  {
+    id: 'wf-digest', name: 'Daily research digest', enabled: false, trigger: 'DailySchedule',
+    actions: [{ id: 'wf-digest-a1', type: 'CallAI', config: { prompt: '최근 작성한 문서들의 핵심을 한국어로 정리해줘.' } }],
+    stats: { runs: 0, success: 0, lastRun: null },
+  },
+];
+
 export const WORKFLOW_RUNS = [
   { name: 'Auto-organize new docs', trigger: 'DocumentCreated', actions: 4, status: 'success', last: '2분 전', runs: 142 },
   { name: 'Daily research digest', trigger: 'DailySchedule', actions: 3, status: 'success', last: '오늘 09:00', runs: 38 },
