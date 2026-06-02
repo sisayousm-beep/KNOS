@@ -5,7 +5,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Icon } from './icons.jsx';
 import { NAV } from './data.js';
 import { useDocs } from './store.jsx';
-import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakColor } from './tweaks.jsx';
+import { useTweaks, TweaksPanel, TweakSection, TweakRow, TweakRadio, TweakColor } from './tweaks.jsx';
+import * as ai from './ai.js';
 
 import Dashboard from './views/Dashboard.jsx';
 import DocumentEditor from './views/Editor.jsx';
@@ -165,6 +166,41 @@ function Topbar({ view, onCmd, theme, onTheme, onSettings }) {
   );
 }
 
+// Gemini API key: enter / validate / save. Persisted by ai.js to localStorage.
+// Without a key, Phase 3 AI features fall back to local heuristics.
+function GeminiKeyField() {
+  const [val, setVal] = useState(() => ai.getKey());
+  const [status, setStatus] = useState('idle'); // idle | checking | ok | bad
+  const [msg, setMsg] = useState('');
+
+  function onChange(v) { setVal(v); ai.setKey(v); setStatus('idle'); setMsg(''); }
+
+  async function validate() {
+    setStatus('checking'); setMsg('');
+    const r = await ai.validateKey(val);
+    if (r.ok) { ai.setKey(val); setStatus('ok'); setMsg('연결됨 · Gemini Flash'); }
+    else { setStatus('bad'); setMsg(r.error); }
+  }
+
+  const tint = status === 'ok' ? '#1a7f4b' : status === 'bad' ? '#c0392b' : 'rgba(41,38,27,.5)';
+  return (
+    <TweakRow label="API Key">
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input className="twk-field" type="password" value={val} placeholder="AIza…"
+               onChange={(e) => onChange(e.target.value)} style={{ flex: 1 }} />
+        <button className="twk-x" type="button" title="키 검증" onClick={validate}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{ width: 'auto', padding: '0 8px', fontSize: 11 }}>
+          {status === 'checking' ? '검증 중…' : '검증'}
+        </button>
+      </div>
+      <div style={{ fontSize: 10, color: tint, minHeight: 13, marginTop: 2 }}>
+        {msg || (val ? '저장됨 · 검증을 눌러 확인' : '비워두면 로컬 휴리스틱 모드')}
+      </div>
+    </TweakRow>
+  );
+}
+
 export default function App() {
   const { createDoc } = useDocs();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
@@ -204,7 +240,7 @@ export default function App() {
       case 'editor': return <DocumentEditor docId={openId} onOpen={onOpen} onNew={onNew} onNav={setView} />;
       case 'graph': return <KnowledgeGraph layout={t.graphLayout} onOpen={onOpen} />;
       case 'search': return <SearchCenter onOpen={onOpen} />;
-      case 'ai': return <AIWorkspace />;
+      case 'ai': return <AIWorkspace onOpen={onOpen} />;
       case 'workflow': return <WorkflowBuilder />;
       case 'plugins': return <PluginMarketplace />;
       default: return <EmptyView title="준비 중" sub="이 화면은 곧 제공됩니다." icon="settings" />;
@@ -232,6 +268,8 @@ export default function App() {
         <TweakRadio label="Density" value={t.dashboardDensity} options={['dense', 'spacious']} onChange={(v) => { setTweak('dashboardDensity', v); setView('dashboard'); }} />
         <TweakSection label="Knowledge Graph" />
         <TweakRadio label="Layout" value={t.graphLayout} options={['force', 'cluster', 'radial']} onChange={(v) => { setTweak('graphLayout', v); setView('graph'); }} />
+        <TweakSection label="AI · Gemini" />
+        <GeminiKeyField />
       </TweaksPanel>
     </div>
   );

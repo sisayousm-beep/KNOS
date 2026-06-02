@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Icon } from '../icons.jsx';
 import { useDocs } from '../store.jsx';
 import { renderMarkdown, headings } from '../markdown.js';
+import * as ai from '../ai.js';
 
 function sameTags(a, b) {
   return a.length === b.length && a.every((t, i) => t === b[i]);
@@ -22,6 +23,9 @@ export default function DocumentEditor({ docId, onOpen, onNew, onNav }) {
   const [tagDraft, setTagDraft] = useState('');
   const [mode, setMode] = useState('write');
   const [status, setStatus] = useState('saved');
+  const [aiBusy, setAiBusy] = useState(null);   // 'summary' | 'tags' | null
+  const [summary, setSummary] = useState(null);  // { text, source }
+  const [aiMsg, setAiMsg] = useState('');
   const idRef = useRef(null);
 
   // Load local editing state when the open document changes.
@@ -34,6 +38,9 @@ export default function DocumentEditor({ docId, onOpen, onNew, onNav }) {
       setTags(doc.tags);
       setMode('write');
       setStatus('saved');
+      setSummary(null);
+      setAiMsg('');
+      setAiBusy(null);
     }
   }, [doc]);
 
@@ -69,6 +76,36 @@ export default function DocumentEditor({ docId, onOpen, onNew, onNav }) {
   }
   function removeTag(t) { setTags(tags.filter((x) => x !== t)); }
 
+  // Phase 3 AI — operate on the live (unsaved) editor buffer.
+  async function runSummary() {
+    setAiBusy('summary'); setAiMsg('');
+    try {
+      const r = await ai.summarize({ title, content });
+      setSummary(r);
+    } catch (e) { setAiMsg(`요약 실패: ${e.message}`); }
+    finally { setAiBusy(null); }
+  }
+
+  async function runTags() {
+    setAiBusy('tags'); setAiMsg('');
+    try {
+      const { tags: fresh, source } = await ai.suggestTags({ title, content }, tags);
+      if (fresh.length) {
+        setTags([...tags, ...fresh]);
+        setAiMsg(`${source === 'gemini' ? 'Gemini' : '로컬'} 태그 ${fresh.length}개 추가: ${fresh.join(', ')}`);
+      } else {
+        setAiMsg('새로 추천할 태그가 없습니다.');
+      }
+    } catch (e) { setAiMsg(`태그 생성 실패: ${e.message}`); }
+    finally { setAiBusy(null); }
+  }
+
+  function insertSummary() {
+    const quoted = summary.text.split('\n').map((l) => `> ${l}`).join('\n');
+    setContent(`> **AI 요약**\n${quoted}\n\n${content}`);
+    setSummary(null);
+  }
+
   function onDelete() {
     const id = doc.id;
     const rest = docs.filter((d) => d.id !== id);
@@ -101,6 +138,12 @@ export default function DocumentEditor({ docId, onOpen, onNew, onNav }) {
           {status === 'saving'
             ? <span className="badge" style={{ height: 18 }}><span className="spinner" style={{ width: 9, height: 9, borderWidth: 1.5 }}></span>저장 중…</span>
             : <span className="badge badge-success" style={{ height: 18 }}><Icon name="check" size={10} />저장됨</span>}
+          <button className="btn btn-sm btn-ghost" disabled={!!aiBusy} onClick={runSummary} title="AI 요약" style={{ marginLeft: 4 }}>
+            {aiBusy === 'summary' ? <span className="spinner" style={{ width: 11, height: 11, borderWidth: 1.5 }} /> : <Icon name="sparkles" size={12} style={{ color: 'var(--accent)' }} />}AI 요약
+          </button>
+          <button className="btn btn-sm btn-ghost" disabled={!!aiBusy} onClick={runTags} title="AI 태그 생성">
+            {aiBusy === 'tags' ? <span className="spinner" style={{ width: 11, height: 11, borderWidth: 1.5 }} /> : <Icon name="hash" size={12} style={{ color: 'var(--accent)' }} />}AI 태그
+          </button>
           <div className="segmented" style={{ marginLeft: 4 }}>
             <button className={mode === 'write' ? 'active' : ''} onClick={() => setMode('write')}>Write</button>
             <button className={mode === 'preview' ? 'active' : ''} onClick={() => setMode('preview')}>Preview</button>
@@ -129,6 +172,8 @@ export default function DocumentEditor({ docId, onOpen, onNew, onNav }) {
                 style={{ width: 80, background: 'none', border: 'none', outline: 'none', color: 'var(--text-secondary)', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }} />
             </div>
 
+            {aiMsg && <div style={{ margin: '-8px 0 16px', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{aiMsg}</div>}
+
             {mode === 'write' ? (
               <textarea className="kos-editor-area" value={content} onChange={(e) => setContent(e.target.value)}
                 placeholder={'마크다운으로 작성하세요…\n\n# 제목\n## 소제목\n- 목록\n[[다른 문서]] 로 연결, `코드`, **굵게**'}
@@ -143,6 +188,20 @@ export default function DocumentEditor({ docId, onOpen, onNew, onNav }) {
 
       {/* Right: backlinks + outline */}
       <div style={{ width: 300, flex: 'none', borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+        {summary && (
+          <div style={{ padding: '12px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Icon name="sparkles" size={14} style={{ color: 'var(--accent)' }} />
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>AI 요약</span>
+              <span className="badge badge-accent" style={{ height: 16, marginLeft: 'auto' }}>{summary.source === 'gemini' ? 'Gemini' : '로컬'}</span>
+            </div>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{summary.text}</div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+              <button className="btn btn-sm" onClick={insertSummary}><Icon name="plus" size={12} />문서에 삽입</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => setSummary(null)}>닫기</button>
+            </div>
+          </div>
+        )}
         <div className="kos-panel-head">
           <span style={{ fontSize: 'var(--text-md)', fontWeight: 600 }}>Backlinks</span>
           <span className="badge" style={{ height: 18 }}>{backlinks.length}</span>
