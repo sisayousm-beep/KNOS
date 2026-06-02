@@ -2,29 +2,35 @@
 // Force-directed / Cluster / Radial layouts, interactive.
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Icon } from '../icons.jsx';
-import { EDGES } from '../data.js';
 import { useDocs } from '../store.jsx';
 
-// Build node list from the real docs + a couple of synthetic nodes referenced by edges.
+// Build the graph straight from real documents: nodes = docs, edges = resolved
+// [[wikilinks]]. Weight 2 when two docs link each other, else 1 (connection strength).
 function buildGraph(docs) {
   const ids = new Set(docs.map((d) => d.id));
-  EDGES.forEach(([a, b]) => { ids.add(a); ids.add(b); });
-  const extra = { 'd-scaling': { id: 'd-scaling', title: 'Scaling Hypothesis', tag: 'scaling', links: 4 } };
-  const nodes = [...ids].map((id) => {
-    const d = docs.find((x) => x.id === id) || extra[id] || { id, title: id.replace('d-', ''), tag: 'misc', links: 2 };
-    return { ...d, deg: 0 };
-  });
+  const nodes = docs.map((d) => ({ ...d, deg: 0 }));
   const adj = {}; nodes.forEach((n) => { adj[n.id] = []; });
-  EDGES.forEach(([a, b, w]) => { if (adj[a] && adj[b]) { adj[a].push({ t: b, w }); adj[b].push({ t: a, w }); } });
-  nodes.forEach((n) => { n.deg = (adj[n.id] || []).length; });
-  return { nodes, adj };
+
+  const seen = {};
+  const edges = [];
+  docs.forEach((d) => {
+    (d.outgoing || []).forEach((t) => {
+      if (!ids.has(t) || t === d.id) return;
+      const key = d.id < t ? `${d.id}|${t}` : `${t}|${d.id}`;
+      if (seen[key]) { seen[key][2] = 2; return; } // reciprocal link → stronger
+      const e = [d.id, t, 1]; seen[key] = e; edges.push(e);
+    });
+  });
+  edges.forEach(([a, b, w]) => { adj[a].push({ t: b, w }); adj[b].push({ t: a, w }); });
+  nodes.forEach((n) => { n.deg = adj[n.id].length; });
+  return { nodes, adj, edges };
 }
 
 const TAG_HUES = { transformer: 210, attention: 200, llm: 220, rag: 160, 'vector-db': 150, embedding: 170, agent: 265, 'fine-tuning': 35, evaluation: 300, quantization: 20, prompting: 280, moe: 190, scaling: 230, misc: 0 };
 
 export default function KnowledgeGraph({ layout = 'force', onOpen }) {
   const { docs } = useDocs();
-  const { nodes, adj } = useMemo(() => buildGraph(docs), [docs]);
+  const { nodes, adj, edges } = useMemo(() => buildGraph(docs), [docs]);
   const wrapRef = useRef(null);
   const posRef = useRef({});
   const [, force] = useState(0);
@@ -51,6 +57,11 @@ export default function KnowledgeGraph({ layout = 'force', onOpen }) {
     ro.observe(el); return () => ro.disconnect();
   }, []);
 
+  // Keep the selection valid as docs are created / deleted.
+  useEffect(() => {
+    if (nodes.length && !nodes.some((n) => n.id === sel)) setSel(nodes[0].id);
+  }, [nodes, sel]);
+
   const dist = useMemo(() => {
     const d = {}; nodes.forEach((n) => { d[n.id] = Infinity; }); d[sel] = 0;
     const q = [sel];
@@ -76,7 +87,7 @@ export default function KnowledgeGraph({ layout = 'force', onOpen }) {
           a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
         }
       }
-      EDGES.forEach(([s, t, w]) => {
+      edges.forEach(([s, t, w]) => {
         const a = p[s], b = p[t]; if (!a || !b) return;
         const dx = b.x - a.x, dy = b.y - a.y; const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
         const target = layout === 'radial' ? 70 : 110;
@@ -109,7 +120,7 @@ export default function KnowledgeGraph({ layout = 'force', onOpen }) {
     }
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [layout, size.w, size.h, dist, sel, nodes]);
+  }, [layout, size.w, size.h, dist, sel, nodes, edges]);
 
   function onPointerDown(e, id) {
     e.stopPropagation();
@@ -142,7 +153,7 @@ export default function KnowledgeGraph({ layout = 'force', onOpen }) {
         style={{ flex: 1, position: 'relative', overflow: 'hidden', cursor: 'grab', background: 'var(--graph-bg)', backgroundImage: 'radial-gradient(var(--dot-grid) 1px, transparent 1px)', backgroundSize: '22px 22px' }}>
 
         <div style={{ position: 'absolute', top: 14, left: 14, zIndex: 5, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div className="badge badge-accent" style={{ height: 24 }}><Icon name="graph" size={12} />{nodes.length} nodes · {EDGES.length} edges</div>
+          <div className="badge badge-accent" style={{ height: 24 }}><Icon name="graph" size={12} />{nodes.length} nodes · {edges.length} edges</div>
         </div>
         <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 5, display: 'flex', gap: 6, flexDirection: 'column' }}>
           <button className="btn btn-icon btn-sm" onClick={() => setZoom((z) => Math.min(2.2, z + 0.2))}><Icon name="zoomIn" size={14} /></button>
@@ -152,7 +163,7 @@ export default function KnowledgeGraph({ layout = 'force', onOpen }) {
 
         <svg width={size.w} height={size.h} style={{ position: 'absolute', inset: 0 }}>
           <g transform={`translate(${cx},${cy}) scale(${zoom})`}>
-            {EDGES.map(([s, t, w], i) => {
+            {edges.map(([s, t, w], i) => {
               const a = p[s], b = p[t]; if (!a || !b) return null;
               const isSel = s === sel || t === sel;
               return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
