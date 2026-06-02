@@ -47,11 +47,9 @@ export function WorkflowsProvider({ children }) {
   // > 0 while any workflow is executing — document mutations made by actions
   // must not be read as fresh triggers.
   const runningRef = useRef(0);
-  const [busy, setBusy] = useState(false);
 
   const execute = useCallback(async (wf, doc, triggerLabel) => {
     runningRef.current += 1;
-    setBusy(true);
     try {
       const entry = await runWorkflow(wf, {
         doc,
@@ -72,7 +70,6 @@ export function WorkflowsProvider({ children }) {
       return entry;
     } finally {
       runningRef.current -= 1;
-      if (runningRef.current === 0) setBusy(false);
     }
   }, [updateDoc, createDoc]);
 
@@ -143,9 +140,9 @@ export function WorkflowsProvider({ children }) {
   }, [execute]);
 
   const value = useMemo(() => ({
-    defs, runs, busy, createWorkflow, updateWorkflow, deleteWorkflow, runNow,
+    defs, runs, createWorkflow, updateWorkflow, deleteWorkflow, runNow,
     hasKey: ai.hasKey(),
-  }), [defs, runs, busy, createWorkflow, updateWorkflow, deleteWorkflow, runNow]);
+  }), [defs, runs, createWorkflow, updateWorkflow, deleteWorkflow, runNow]);
 
   return <WorkflowsContext.Provider value={value}>{children}</WorkflowsContext.Provider>;
 }
