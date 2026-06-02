@@ -8,6 +8,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Icon } from '../icons.jsx';
 import { useDocs } from '../store.jsx';
 import * as ai from '../ai.js';
+import * as rag from '../rag.js';
 
 const EXAMPLES = [
   '벡터 DB 관련 내용 정리해줘',
@@ -20,8 +21,22 @@ export default function AIWorkspace({ onOpen }) {
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [idx, setIdx] = useState(() => rag.indexInfo());
+  const [building, setBuilding] = useState(null); // { done, total } | null
   const scrollRef = useRef(null);
   const keyed = ai.hasKey();
+
+  async function buildIndex() {
+    setBuilding({ done: 0, total: 0 });
+    try {
+      const info = await rag.buildIndex(docs, (done, total) => setBuilding({ done, total }));
+      setIdx(info.count ? info : null);
+    } catch (e) {
+      setMsgs((m) => [...m, { role: 'ai', text: `인덱스 빌드 실패: ${e.message}`, sources: [], source: 'error' }]);
+    } finally {
+      setBuilding(null);
+    }
+  }
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -34,8 +49,8 @@ export default function AIWorkspace({ onOpen }) {
     setMsgs((m) => [...m, { role: 'user', text: question }]);
     setBusy(true);
     try {
-      const { answer, sources, source } = await ai.ask(question, docs);
-      setMsgs((m) => [...m, { role: 'ai', text: answer, sources, source }]);
+      const { answer, sources, source, retrieval } = await ai.ask(question, docs);
+      setMsgs((m) => [...m, { role: 'ai', text: answer, sources, source, retrieval }]);
     } catch (e) {
       setMsgs((m) => [...m, { role: 'ai', text: `오류: ${e.message}`, sources: [], source: 'error' }]);
     } finally {
@@ -75,7 +90,7 @@ export default function AIWorkspace({ onOpen }) {
                         <div key={s.id} className="card card-hover" style={{ padding: '11px 12px', cursor: 'pointer' }} onClick={() => onOpen?.(s)}>
                           <Icon name="doc" size={14} style={{ color: 'var(--accent)', marginBottom: 8 }} />
                           <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 450, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{s.title}</div>
-                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 4 }}>retrieved · {m.source === 'gemini' ? 'Gemini' : 'local'}</div>
+                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 4 }}>retrieved · {m.retrieval === 'vector' ? 'vector' : 'keyword'}</div>
                         </div>
                       ))}
                     </div>
@@ -107,9 +122,25 @@ export default function AIWorkspace({ onOpen }) {
         </div>
         <div className="card" style={{ padding: '12px', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}><Icon name="sparkles" size={14} style={{ color: keyed ? 'var(--success)' : 'var(--text-tertiary)' }} /><span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{keyed ? 'Gemini Flash' : '로컬 모드'}</span></div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.7 }}>{docs.length} docs indexed<br />{keyed ? 'AI 종합 답변' : '키워드 검색 답변'}</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.7 }}>{docs.length} docs · {keyed ? 'AI 종합 답변' : '키워드 검색 답변'}</div>
         </div>
-        {!keyed && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.6, marginBottom: 12 }}>설정 → AI · Gemini 에서 API 키를 넣으면 AI 종합 답변이 켜집니다.</div>}
+
+        <div className="card" style={{ padding: '12px', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Icon name="database" size={14} style={{ color: idx ? 'var(--info)' : 'var(--text-tertiary)' }} />
+            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>Vector Index</span>
+            <span className="badge badge-accent" style={{ height: 16, marginLeft: 'auto' }}>Phase 4</span>
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.7, marginBottom: 10 }}>
+            {idx ? <>{idx.count} chunks · {idx.docs} docs<br />embed: {idx.mode}</> : <>인덱스 없음<br />키워드 검색만 사용</>}
+          </div>
+          <button className="btn btn-sm" style={{ width: '100%', justifyContent: 'center' }} disabled={!!building} onClick={buildIndex}>
+            {building
+              ? <><span className="spinner" style={{ width: 11, height: 11, borderWidth: 1.5 }} />임베딩 {building.total ? `${building.done}/${building.total}` : '…'}</>
+              : <><Icon name="layers" size={12} />{idx ? '인덱스 재빌드' : '인덱스 빌드'}</>}
+          </button>
+        </div>
+        {!keyed && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.6, marginBottom: 12 }}>설정 → AI · Gemini 에서 API 키를 넣으면 AI 종합 답변 + Gemini 임베딩이 켜집니다.</div>}
         {threads.length > 0 && <>
           <div className="section-label" style={{ margin: '16px 0 10px' }}>Recent threads</div>
           {threads.map((t, i) => (

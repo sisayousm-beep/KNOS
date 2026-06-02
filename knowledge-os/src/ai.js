@@ -5,6 +5,7 @@
 // Design (설계도.json §2.3, Phase 3) calls for Gemini Free Tier.
 // ============================================================
 import { excerpt } from './util.js';
+import * as rag from './rag.js';
 
 const KEY = 'logia.gemini.key';
 const MODEL = 'gemini-2.0-flash';
@@ -178,31 +179,58 @@ export async function suggestTags(doc, existing = []) {
   return { tags: fresh, source };
 }
 
-// Returns { answer, sources: doc[], source }.
+// Retrieve passages for a question: Phase 4 vector search over the RAG index
+// when one is built, else Phase 3 keyword ranking over whole docs.
+// Returns { passages: [{title,text}], sources: doc[], retrieval: 'vector'|'keyword' }.
+async function retrieve(question, docs) {
+  try {
+    if (rag.indexInfo()) {
+      const hits = await rag.search(question, 6);
+      if (hits.length) {
+        const sources = [];
+        const seen = new Set();
+        for (const h of hits) {
+          if (seen.has(h.docId)) continue;
+          seen.add(h.docId);
+          const d = docs.find((x) => x.id === h.docId);
+          if (d) sources.push(d);
+          if (sources.length >= 4) break;
+        }
+        return { passages: hits.map((h) => ({ title: h.title, text: h.text })), sources, retrieval: 'vector' };
+      }
+    }
+  } catch { /* fall through to keyword retrieval */ }
+  const sources = rankDocs(question, docs, 4);
+  return { passages: sources.map((d) => ({ title: d.title, text: plain(d.content).slice(0, 1500) })), sources, retrieval: 'keyword' };
+}
+
+// Returns { answer, sources: doc[], source, retrieval }.
 export async function ask(question, docs) {
-  const context = rankDocs(question, docs, 4);
+  const { passages, sources, retrieval } = await retrieve(question, docs);
   if (hasKey()) {
     try {
-      const ctx = context.length
-        ? context.map((d, i) => `[문서 ${i + 1}] ${d.title}\n${plain(d.content).slice(0, 1500)}`).join('\n\n')
+      const ctx = passages.length
+        ? passages.map((p, i) => `[${i + 1}] ${p.title}\n${p.text}`).join('\n\n')
         : '(관련 문서를 찾지 못함)';
       const answer = await gemini(
-        `너는 개인 지식베이스 비서다. 아래 문서들만 근거로 사용자의 질문에 한국어로 답해라. 모르면 모른다고 말해라.\n\n=== 문서 ===\n${ctx}\n\n=== 질문 ===\n${question}`,
+        `너는 개인 지식베이스 비서다. 아래 발췌문만 근거로 사용자의 질문에 한국어로 답해라. 모르면 모른다고 말해라.\n\n=== 발췌 ===\n${ctx}\n\n=== 질문 ===\n${question}`,
         { temperature: 0.3, maxOutputTokens: 1024 },
       );
-      return { answer, sources: context, source: 'gemini' };
+      return { answer, sources, source: 'gemini', retrieval };
     } catch (e) {
       if (e.message !== 'NO_KEY') throw e;
     }
   }
   // Local fallback: stitch excerpts from the retrieved docs.
-  if (!context.length) {
-    return { answer: '지식베이스에서 관련 문서를 찾지 못했습니다. 다른 키워드로 질문해 보세요.', sources: [], source: 'local' };
+  if (!sources.length) {
+    return { answer: '지식베이스에서 관련 문서를 찾지 못했습니다. 다른 키워드로 질문해 보세요.', sources: [], source: 'local', retrieval };
   }
-  const body = context.map((d) => `• ${d.title} — ${excerpt(d.content, 120)}`).join('\n');
+  const body = sources.map((d) => `• ${d.title} — ${excerpt(d.content, 120)}`).join('\n');
+  const how = retrieval === 'vector' ? '벡터' : '키워드';
   return {
-    answer: `관련 문서 ${context.length}건을 찾았습니다. 핵심을 정리하면:\n\n${body}\n\n(로컬 검색 결과 — Gemini 키를 설정하면 AI가 종합 답변을 작성합니다.)`,
-    sources: context,
+    answer: `관련 문서 ${sources.length}건을 찾았습니다(${how} 검색). 핵심을 정리하면:\n\n${body}\n\n(Gemini 키를 설정하면 AI가 종합 답변을 작성합니다.)`,
+    sources,
     source: 'local',
+    retrieval,
   };
 }
