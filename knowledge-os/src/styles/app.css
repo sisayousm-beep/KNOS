@@ -1,0 +1,59 @@
+/* ============================================================
+   Knowledge OS — app-level styles (markdown prose, editor, wikilinks)
+   Layered on top of tokens.css + components.css.
+   ============================================================ */
+
+/* Wikilinks — [[Title]] references */
+.wikilink {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent-border);
+  cursor: pointer;
+}
+.wikilink:hover { border-bottom-style: solid; }
+
+/* Rendered markdown ("prose") */
+.prose { color: var(--text-primary); font-size: var(--text-md); line-height: 1.75; }
+.prose > *:first-child { margin-top: 0; }
+.prose h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; margin: 6px 0 10px; }
+.prose h2 { font-size: 20px; font-weight: 600; margin: 26px 0 8px; }
+.prose h3 { font-size: 16px; font-weight: 600; margin: 20px 0 6px; }
+.prose p { margin: 10px 0; }
+.prose ul, .prose ol { margin: 10px 0; padding-left: 22px; }
+.prose li { margin: 4px 0; }
+.prose a { color: var(--accent); }
+.prose strong { color: var(--text-primary); font-weight: 600; }
+.prose blockquote {
+  margin: 14px 0; padding: 4px 0 4px 16px;
+  border-left: 2px solid var(--accent); color: var(--text-secondary);
+}
+.prose code {
+  font-family: var(--font-mono); font-size: 0.9em;
+  background: var(--bg-secondary); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); padding: 1px 5px; color: var(--text-secondary);
+}
+.prose pre {
+  margin: 14px 0; padding: 14px 16px; overflow: auto;
+  background: var(--bg-secondary); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+.prose pre code { background: none; border: none; padding: 0; }
+.prose hr { border: none; border-top: 1px solid var(--border-subtle); margin: 22px 0; }
+.prose table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: var(--text-base); }
+.prose th, .prose td { border: 1px solid var(--border-subtle); padding: 7px 10px; text-align: left; }
+.prose th { background: var(--surface-secondary); }
+
+/* Editor writing surface */
+.kos-editor-area {
+  width: 100%; height: 100%; resize: none; border: none; outline: none;
+  background: none; color: var(--text-primary);
+  font-family: var(--font-sans); font-size: var(--text-md); line-height: 1.75;
+}
+.kos-editor-area::placeholder { color: var(--text-disabled); }
+
+.kos-title-input {
+  width: 100%; border: none; outline: none; background: none;
+  color: var(--text-primary); font-family: var(--font-sans);
+  font-size: 30px; font-weight: 600; letter-spacing: -0.02em;
+}
+.kos-title-input::placeholder { color: var(--text-disabled); }

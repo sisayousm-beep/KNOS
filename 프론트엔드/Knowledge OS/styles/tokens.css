@@ -1,0 +1,215 @@
+/* ============================================================
+   Knowledge OS — Design Tokens
+   Dark-first. Single blue accent. Zinc-based neutrals.
+   Inspired by Linear / Vercel / Cursor.
+   ============================================================ */
+
+/* ---------- Fonts ---------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ============================================================
+   DARK THEME (default)
+   ============================================================ */
+:root,
+[data-theme="dark"] {
+  /* Background */
+  --bg-primary:    #0A0A0A;
+  --bg-secondary:  #111111;
+  --bg-tertiary:   #171717;
+
+  /* Surface */
+  --surface-primary:   #18181B;
+  --surface-secondary: #202024;
+  --surface-elevated:  #27272A;
+
+  /* Borders */
+  --border-subtle:  #27272A;
+  --border-default: #3F3F46;
+  --border-strong:  #52525B;
+
+  /* Text */
+  --text-primary:   #FAFAFA;
+  --text-secondary: #A1A1AA;
+  --text-tertiary:  #71717A;
+  --text-disabled:  #52525B;
+
+  /* Accent */
+  --accent:         #3B82F6;
+  --accent-hover:   #60A5FA;
+  --accent-pressed: #2563EB;
+  --accent-bg:      rgba(59, 130, 246, 0.12);
+  --accent-border:  rgba(59, 130, 246, 0.35);
+  --accent-glow:    rgba(59, 130, 246, 0.18);
+
+  /* Semantic */
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --error:   #EF4444;
+  --info:    #06B6D4;
+  --success-bg: rgba(34, 197, 94, 0.12);
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --error-bg:   rgba(239, 68, 68, 0.12);
+  --info-bg:    rgba(6, 182, 212, 0.12);
+
+  /* Graph */
+  --graph-node:       #71717A;
+  --graph-node-active:#3B82F6;
+  --graph-node-conn:  #60A5FA;
+  --graph-edge:       rgba(255, 255, 255, 0.15);
+  --graph-edge-sel:   rgba(59, 130, 246, 0.70);
+  --graph-bg:         #0A0A0A;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.6);
+  --shadow-pop: 0 8px 28px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04);
+
+  --scrim: rgba(0,0,0,0.6);
+  --dot-grid: rgba(255,255,255,0.035);
+}
+
+/* ============================================================
+   LIGHT THEME
+   ============================================================ */
+[data-theme="light"] {
+  --bg-primary:    #FFFFFF;
+  --bg-secondary:  #FBFBFB;
+  --bg-tertiary:   #F4F4F5;
+
+  --surface-primary:   #FFFFFF;
+  --surface-secondary: #F4F4F5;
+  --surface-elevated:  #FFFFFF;
+
+  --border-subtle:  #ECECEE;
+  --border-default: #E4E4E7;
+  --border-strong:  #D4D4D8;
+
+  --text-primary:   #09090B;
+  --text-secondary: #52525B;
+  --text-tertiary:  #71717A;
+  --text-disabled:  #A1A1AA;
+
+  --accent:         #2563EB;
+  --accent-hover:   #3B82F6;
+  --accent-pressed: #1D4ED8;
+  --accent-bg:      rgba(37, 99, 235, 0.08);
+  --accent-border:  rgba(37, 99, 235, 0.30);
+  --accent-glow:    rgba(37, 99, 235, 0.12);
+
+  --success: #16A34A;
+  --warning: #D97706;
+  --error:   #DC2626;
+  --info:    #0891B2;
+  --success-bg: rgba(22, 163, 74, 0.10);
+  --warning-bg: rgba(217, 119, 6, 0.10);
+  --error-bg:   rgba(220, 38, 38, 0.10);
+  --info-bg:    rgba(8, 145, 178, 0.10);
+
+  --graph-node:       #A1A1AA;
+  --graph-node-active:#2563EB;
+  --graph-node-conn:  #60A5FA;
+  --graph-edge:       rgba(0, 0, 0, 0.12);
+  --graph-edge-sel:   rgba(37, 99, 235, 0.65);
+  --graph-bg:         #FBFBFB;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.12);
+  --shadow-pop: 0 8px 28px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.04);
+
+  --scrim: rgba(9,9,11,0.35);
+  --dot-grid: rgba(0,0,0,0.04);
+}
+
+/* ============================================================
+   SCALE TOKENS (theme-independent)
+   ============================================================ */
+:root {
+  /* Type families */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* Type scale */
+  --text-xs:   11px;
+  --text-sm:   12px;
+  --text-base: 13px;
+  --text-md:   14px;
+  --text-lg:   16px;
+  --text-xl:   20px;
+  --text-2xl:  26px;
+  --text-3xl:  34px;
+  --text-4xl:  46px;
+
+  /* Spacing (4px base) */
+  --sp-0: 0px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-full: 9999px;
+
+  /* Layout */
+  --sidebar-w: 248px;
+  --sidebar-w-collapsed: 56px;
+  --topbar-h: 48px;
+  --rightpanel-w: 320px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 280ms;
+
+  /* Breakpoints (reference)
+     tablet: 1024  laptop: 1280  desktop: 1536  4k: 1920+ */
+}
+
+/* ============================================================
+   BASE RESET / GLOBALS
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  font-feature-settings: "cv02","cv03","cv04","cv11";
+}
+::selection { background: var(--accent-bg); color: var(--text-primary); }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: var(--radius-full);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); background-clip: padding-box; }
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.mono { font-family: var(--font-mono); }
