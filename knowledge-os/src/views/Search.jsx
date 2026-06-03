@@ -1,7 +1,8 @@
 // Knowledge OS — Search Center (Phase 1: real full-text filter over the store)
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icon } from '../icons.jsx';
 import { useDocs } from '../store.jsx';
+import { bus } from '../plugins.js';
 
 export default function SearchCenter({ onOpen }) {
   const { docs } = useDocs();
@@ -13,6 +14,13 @@ export default function SearchCenter({ onOpen }) {
       || d.tags.some((t) => t.toLowerCase().includes(ql))
       || d.content.toLowerCase().includes(ql);
   });
+
+  // Phase 6: fire the onSearch hook (debounced) for plugins to observe.
+  useEffect(() => {
+    if (!ql) return;
+    const t = setTimeout(() => bus.emit('onSearch', { query: q.trim(), results: results.length }), 500);
+    return () => clearTimeout(t);
+  }, [ql]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ maxWidth: 880, margin: '0 auto', padding: '40px 32px' }}>

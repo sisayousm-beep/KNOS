@@ -9,6 +9,7 @@ import { Icon } from '../icons.jsx';
 import { useDocs } from '../store.jsx';
 import * as ai from '../ai.js';
 import * as rag from '../rag.js';
+import { bus } from '../plugins.js';
 
 const EXAMPLES = [
   '벡터 DB 관련 내용 정리해줘',
@@ -51,6 +52,7 @@ export default function AIWorkspace({ onOpen }) {
     try {
       const { answer, sources, source, retrieval } = await ai.ask(question, docs);
       setMsgs((m) => [...m, { role: 'ai', text: answer, sources, source, retrieval }]);
+      bus.emit('onAIResponse', { question, answer, source }); // Phase 6 hook
     } catch (e) {
       setMsgs((m) => [...m, { role: 'ai', text: `오류: ${e.message}`, sources: [], source: 'error' }]);
     } finally {
