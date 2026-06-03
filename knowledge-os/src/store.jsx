@@ -8,14 +8,21 @@ import { SEED_DOCS } from './data.js';
 import { uid, relativeTime, wordCount, excerpt } from './util.js';
 import { wikiLinks } from './markdown.js';
 
-const KEY = 'logia.docs.v1';
+// v2: dropped the example/research dummy docs; first run now seeds the
+// manuals + worldbuilding imported from 세계관/ (see scripts/import-worldbuilding.mjs).
+const KEY = 'logia.docs.v2';
+
+// Worldbuilding seed is generated locally and gitignored, so it may be absent
+// on a fresh clone — import.meta.glob resolves to {} in that case (no error).
+const wbModules = import.meta.glob('./seed-worldbuilding.local.js', { eager: true });
+const WORLDBUILDING_DOCS = Object.values(wbModules)[0]?.WORLDBUILDING_DOCS ?? [];
 
 // Turn the seed list (relative `ago`) into real, timestamped documents.
 function seed() {
   const now = Date.now();
-  return SEED_DOCS.map(({ ago = 0, ...rest }) => {
+  return [...SEED_DOCS, ...WORLDBUILDING_DOCS].map(({ ago = 0, ...rest }) => {
     const ts = new Date(now - ago * 60000).toISOString();
-    return { ...rest, createdAt: ts, updatedAt: ts };
+    return { ...rest, tags: rest.tags ?? [], createdAt: ts, updatedAt: ts };
   });
 }
 

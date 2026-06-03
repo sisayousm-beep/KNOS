@@ -1,206 +1,112 @@
 // ============================================================
-// Knowledge OS — Seed data (AI/ML research notes)
-// Used once to populate the local store on first run.
-// `ago` = minutes before first-launch, turned into a real timestamp.
+// Knowledge OS — Seed data
+// The example/research dummy notes were removed. The real knowledge
+// base is imported from 세계관/ (local only) by
+// scripts/import-worldbuilding.mjs and merged in store.jsx.
+// What remains here: the two in-app user manuals, the starter
+// workflow definitions, and the navigation list.
 // ============================================================
 
+// ---- User manuals (seeded as real documents) -----------------------------
 export const SEED_DOCS = [
   {
-    id: 'd-transformer', title: 'Attention Is All You Need',
-    tags: ['transformer', 'attention', 'seq2seq'], ago: 2, ai: true, starred: true,
-    content: `# Attention Is All You Need
+    id: 'guide-start', title: 'LOGIA 시작 가이드 (초보자용)',
+    tags: ['LOGIA', '가이드'], ago: 1, starred: true,
+    content: `# LOGIA 시작 가이드 (초보자용)
 
-Transformer는 순환과 합성곱을 완전히 제거하고 **오직 어텐션**만으로 시퀀스를 모델링한다. 이는 병렬화를 가능케 하여 학습 속도를 크게 높인다.
+LOGIA는 문서를 쓰고, 서로 연결하고, AI로 검색·정리하는 개인 지식 운영체제(Knowledge OS)입니다. 더 깊은 내용은 [[LOGIA 심화 가이드 (고급)]] 를 보세요.
 
-## Self-Attention
+## 1. 화면 둘러보기
+왼쪽 사이드바로 화면을 이동합니다. 숫자 키 \`1\`~\`7\` 로도 바로 이동돼요.
+- **Dashboard** — 최근 문서, 통계, 활동 요약.
+- **Document Editor** — 문서 작성·편집.
+- **Knowledge Graph** — 문서 연결을 점과 선으로 시각화.
+- **Search Center** — 제목·태그·본문 전체 검색.
+- **AI Workspace** — 지식 베이스에 질문하기.
+- **Workflow Builder** — 자동화 규칙.
+- **Plugin Marketplace** — 기능 확장.
 
-각 토큰은 Query·Key·Value로 투영되며, 어텐션 가중치는 \`softmax(QKᵀ/√dₖ)V\` 로 계산된다. 자세한 유도는 [[Self-Attention Mechanism]] 참고.
+## 2. 첫 문서 만들기
+1. 왼쪽 위 **New Document** 버튼(또는 \`Ctrl/⌘ + N\`).
+2. 제목과 본문을 입력합니다. 본문은 **마크다운**을 지원해요 (\`# 제목\`, \`- 목록\`, \`**굵게**\`).
+3. 저장은 자동입니다. 새로고침해도 내용이 남습니다.
 
-## Multi-Head Attention
+## 3. 문서 연결하기 — [[위키링크]]
+본문에 \`[[문서 제목]]\` 형식으로 쓰면 그 문서로 가는 링크가 됩니다.
+- 연결된 상대 문서에는 **백링크**(나를 가리키는 문서 목록)가 자동으로 생깁니다.
+- 이 연결들이 모여 **Knowledge Graph** 가 됩니다. 많이 연결할수록 그래프가 풍부해져요.
 
-- 서로 다른 표현 부분공간을 병렬로 학습
-- 각 헤드는 독립적인 Q/K/V 투영을 가짐
+## 4. 검색
+**Search Center** 에서 제목·태그·본문을 한 번에 찾습니다. 아무 화면에서나 \`Ctrl/⌘ + K\` 를 누르면 빠른 명령 팔레트가 열립니다.
 
-관련 문서: [[LLM Scaling Laws 정리]], [[Mixture of Experts 아키텍처]]`,
+## 5. AI 기능
+**AI Workspace** 에서 "벡터 DB 관련 내용 정리해줘" 처럼 질문하면 문서들을 종합해 답합니다. 편집기 안에서는 **AI 요약**·**AI 태그** 버튼도 쓸 수 있어요.
+- **API 키 없이도** 동작합니다(로컬 휴리스틱 모드). 더 똑똑한 답을 원하면 Gemini 키를 넣으세요(아래 설정).
+
+## 6. 설정은 어디에?
+오른쪽 위 **톱니바퀴(⚙) 아이콘**을 누르면 설정 패널이 (화면 우하단에) 열립니다.
+- 테마(다크/라이트), 강조색, 대시보드/그래프 표시 방식.
+- **AI · Gemini** 항목에 API 키를 넣고 *검증* 을 누르면 Gemini Flash 가 켜집니다.
+
+## 7. 다음 단계
+- 워크플로우로 "새 문서가 생기면 자동 요약" 같은 자동화를 만들 수 있어요.
+- 플러그인으로 기능을 확장할 수 있어요.
+- 자세한 원리는 [[LOGIA 심화 가이드 (고급)]] 에 있습니다.`,
   },
   {
-    id: 'd-attention', title: 'Self-Attention Mechanism',
-    tags: ['attention', 'transformer'], ago: 14, ai: true,
-    content: `# Self-Attention Mechanism
+    id: 'guide-advanced', title: 'LOGIA 심화 가이드 (고급)',
+    tags: ['LOGIA', '가이드'], ago: 2,
+    content: `# LOGIA 심화 가이드 (고급)
 
-scaled dot-product attention: \`softmax(QKᵀ/√dₖ)V\`. 스케일링 인자 √dₖ 는 내적이 커질 때 softmax 기울기가 소실되는 것을 막는다.
+[[LOGIA 시작 가이드 (초보자용)]] 의 기본기를 마쳤다면, 여기서 내부 동작을 설명합니다.
 
-## 멀티헤드
+## 1. 아키텍처
+- **Tauri v2 + React 18 + Vite**. 네이티브 WebView2 위에서 도는 데스크톱 앱(웹/Electron 아님).
+- 저장은 전부 **localStorage**. 외부 서버·DB 없음. 주요 키:
+  - \`logia.docs.v2\` — 문서, \`logia.tweaks.v1\` — 설정.
+  - \`logia.rag.v1\` — 벡터 인덱스, \`logia.gemini.key\` — API 키.
+  - \`logia.workflows.v1\` / \`logia.workflow.runs.v1\` — 워크플로우·실행로그.
+  - \`logia.plugins.v1\` / \`logia.plugin.activity.v1\` — 플러그인 상태·훅 로그.
 
-멀티헤드는 서로 다른 표현 부분공간을 병렬로 학습한다. 상위 개념은 [[Attention Is All You Need]] 에 정리되어 있다.`,
-  },
-  {
-    id: 'd-llm', title: 'LLM Scaling Laws 정리',
-    tags: ['llm', 'scaling', 'training'], ago: 60, ai: true,
-    content: `# LLM Scaling Laws 정리
+## 2. AI 계층 (하이브리드)
+\`src/ai.js\` 가 요약·태그·질문응답을 담당합니다.
+- Gemini 키가 있으면 **Gemini Flash**(\`gemini-2.0-flash\` REST) 호출.
+- 없으면 **로컬 휴리스틱**(추출 요약·빈도 기반 태그·키워드 검색)으로 폴백 — 오프라인에서도 동작.
 
-**Chinchilla**: 컴퓨트 최적 학습은 모델 크기와 토큰 수를 동등하게 스케일링한다. 파라미터당 약 20 토큰이 권장된다.
+## 3. RAG (검색 증강)
+\`src/rag.js\` — 외부 벡터 DB 없이 로컬에서 동작합니다.
+- 문서를 ~400자 **청크**로 분할.
+- **임베딩**: 키가 있으면 Gemini \`text-embedding-004\`, 없으면 로컬 해시 TF(256차원).
+- **코사인 벡터 검색** 으로 관련 청크 retrieval → 그 컨텍스트로 답변 생성.
+- AI Workspace 의 **인덱스 빌드** 버튼으로 색인을 만듭니다. 인덱스가 없으면 키워드 검색으로 폴백.
 
-## 시사점
+## 4. 워크플로우 엔진 (트리거 → 액션)
+\`src/workflow.jsx\` + \`src/engine.js\`.
+- 트리거: \`DocumentCreated\` / \`DocumentUpdated\` / \`TagAdded\`(문서 변화 diff), \`DailySchedule\`(24h), \`Manual\`.
+- 액션: \`Summarize\` / \`GenerateTag\` / \`CallAI\` / \`SendWebhook\` / \`RunScript\`.
+- 액션이 문서를 수정해 트리거가 다시 도는 무한 루프는 **재진입 가드**(runningRef)로 차단합니다.
+- 기본 제공 워크플로우는 \`enabled: false\` 상태 — 런치 시 예기치 않은 AI 호출이 없도록.
 
-- 데이터가 부족하면 큰 모델은 과소학습된다
-- 추론 비용까지 고려하면 더 작은 모델 + 더 많은 토큰이 유리
+## 5. 플러그인 SDK (Hook · Sandbox · Store)
+\`src/plugins.js\` + \`src/plugins.jsx\`.
+- **훅 6종**: \`onDocumentCreated/Updated/Deleted\`, \`onTagAdded\`, \`onSearch\`, \`onAIResponse\`. 모듈 싱글톤 버스로 발생.
+- **샌드박스**: 플러그인은 선언한 권한(\`docs:read\`/\`docs:write\`/\`ai\`/\`network\`)만 사용. 선언 안 한 호출은 차단되어 **Hook Activity** 로그에 '차단'으로 남습니다.
+- **스토어**: 내장 플러그인을 설치/사용/중지하고, '샌드박스 점검'으로 권한을 확인합니다. 상태는 localStorage 영속.
 
-연결: [[LoRA & QLoRA 파인튜닝 노트]], [[양자화 — GPTQ, AWQ, GGUF]]`,
-  },
-  {
-    id: 'd-rag', title: 'RAG 파이프라인 설계',
-    tags: ['rag', 'retrieval', 'vector-db'], ago: 1440, draft: true,
-    content: `# RAG 파이프라인 설계
+## 6. 데이터 출처
+- 예시 더미 노트는 제거됨. 실제 지식 베이스는 \`세계관/\`(로컬 전용, git 미포함)에서 \`scripts/import-worldbuilding.mjs\` 로 임포트해 \`src/seed-worldbuilding.local.js\` 로 생성, 첫 실행 시 시드됩니다. 성인 에셋 프롬프트 폴더는 제외됩니다.
+- 세계관을 바꿨으면 \`node scripts/import-worldbuilding.mjs\` 재실행 → 재빌드.
 
-문서 → Chunk → Embedding → Vector DB → 검색 → LLM. 청크 크기와 오버랩이 검색 품질을 좌우한다.
+## 7. 빌드 함정 (이 머신 한정)
+- 프로젝트 경로의 **한글(비-ASCII)** 때문에 \`vite build\` 의 네이티브 Rollup 렌더가 크래시함.
+- 해결: 프론트엔드는 **ASCII 경로**(예: \`C:\\\\Temp\\\\kos\`)에서 \`vite build\` → \`dist\` 를 복사 → 한글 경로에서 \`npm run app:build\`(Rust/Tauri 단계는 한글 경로 OK).
 
-## 체크리스트
-
-- 청크 256~512 토큰, 오버랩 10~20%
-- 메타데이터 필터링으로 정밀도 향상
-- 재순위(rerank)로 상위 결과 품질 보강
-
-참고: [[Vector DB 비교 — Qdrant vs Chroma]], [[Embedding 모델 선택 가이드]]`,
-  },
-  {
-    id: 'd-vectordb', title: 'Vector DB 비교 — Qdrant vs Chroma',
-    tags: ['vector-db', 'rag', 'infra'], ago: 1500,
-    content: `# Vector DB 비교 — Qdrant vs Chroma
-
-**Qdrant**: Rust 기반, 필터링 강점, 프로덕션 적합. **Chroma**: 빠른 프로토타이핑에 적합.
-
-## HNSW 파라미터
-
-- \`m\`: 그래프 연결 수 — 정확도/메모리 트레이드오프
-- \`ef_construct\`: 색인 품질
-- \`ef\`: 검색 시 후보 폭
-
-상위 설계는 [[RAG 파이프라인 설계]] 참고.`,
-  },
-  {
-    id: 'd-embedding', title: 'Embedding 모델 선택 가이드',
-    tags: ['embedding', 'rag', 'vector-db'], ago: 2880, ai: true,
-    content: `# Embedding 모델 선택 가이드
-
-검색용 임베딩은 대칭/비대칭 태스크를 구분해야 한다. MTEB 벤치마크와 차원 수 트레이드오프를 함께 고려한다.
-
-## 선택 기준
-
-- 다국어 지원 여부
-- 차원 수(저장/속도) vs 품질
-- 정규화 및 거리 척도(cosine)
-
-관련: [[RAG 파이프라인 설계]]`,
-  },
-  {
-    id: 'd-finetune', title: 'LoRA & QLoRA 파인튜닝 노트',
-    tags: ['fine-tuning', 'llm', 'training'], ago: 4320,
-    content: `# LoRA & QLoRA 파인튜닝 노트
-
-저랭크 어댑터로 파라미터의 1% 미만만 학습한다. **QLoRA**는 4-bit 양자화로 단일 GPU 학습을 가능케 한다.
-
-## 핵심 하이퍼파라미터
-
-- rank \`r\`, \`alpha\`, dropout
-- 타깃 모듈(q_proj, v_proj …)
-
-연결: [[양자화 — GPTQ, AWQ, GGUF]], [[LLM Scaling Laws 정리]]`,
-  },
-  {
-    id: 'd-agent', title: 'Agent Workflow & Tool Use',
-    tags: ['agent', 'workflow', 'llm'], ago: 5760, ai: true,
-    content: `# Agent Workflow & Tool Use
-
-**ReAct**: 추론과 행동을 교차한다. 도구 호출 → 관찰 → 반성의 루프. 플래닝과 메모리가 신뢰성의 핵심이다.
-
-## 구성 요소
-
-- 도구 스키마 정의
-- 관찰 결과의 컨텍스트 주입
-- 종료 조건과 가드레일
-
-관련: [[Prompt Engineering 패턴]], [[RAG 파이프라인 설계]]`,
-  },
-  {
-    id: 'd-eval', title: 'LLM 평가 방법론',
-    tags: ['evaluation', 'llm'], ago: 7200,
-    content: `# LLM 평가 방법론
-
-LLM-as-judge, 휴먼 평가, 자동 메트릭의 상관관계를 본다. 벤치마크 오염과 일반화 측정의 어려움이 핵심 난점이다.
-
-## 실무 팁
-
-- 고정 평가셋 + 회귀 추적
-- 페어와이즈 비교가 절대 점수보다 안정적
-
-관련: [[Prompt Engineering 패턴]]`,
-  },
-  {
-    id: 'd-quant', title: '양자화 — GPTQ, AWQ, GGUF',
-    tags: ['quantization', 'infra', 'llm'], ago: 8640,
-    content: `# 양자화 — GPTQ, AWQ, GGUF
-
-가중치 양자화로 메모리·지연 시간을 절감한다. 4-bit에서도 perplexity 손실을 최소화하는 보정 기법이 관건이다.
-
-## 포맷
-
-- **GPTQ**: 사후 양자화, GPU 추론
-- **AWQ**: 활성화 인지 가중치 양자화
-- **GGUF**: CPU/llama.cpp 친화
-
-연결: [[LoRA & QLoRA 파인튜닝 노트]]`,
-  },
-  {
-    id: 'd-prompt', title: 'Prompt Engineering 패턴',
-    tags: ['prompting', 'llm', 'agent'], ago: 10080, draft: true,
-    content: `# Prompt Engineering 패턴
-
-Few-shot, CoT, self-consistency. 구조화된 출력과 제약 디코딩으로 신뢰성을 높인다.
-
-## 패턴 모음
-
-- 역할 지정 + 출력 스키마
-- 단계적 사고(CoT) 유도
-- 다중 샘플 투표(self-consistency)
-
-관련: [[Agent Workflow & Tool Use]], [[LLM 평가 방법론]]`,
-  },
-  {
-    id: 'd-moe', title: 'Mixture of Experts 아키텍처',
-    tags: ['moe', 'transformer', 'scaling'], ago: 10080, ai: true,
-    content: `# Mixture of Experts 아키텍처
-
-희소 활성화로 파라미터를 키우되 연산은 일정하게 유지한다. 라우팅과 로드 밸런싱이 학습 안정성을 좌우한다.
-
-## 핵심
-
-- top-k 라우팅
-- 보조 손실로 전문가 균형 유지
-
-상위 개념: [[Attention Is All You Need]], [[LLM Scaling Laws 정리]]`,
+## 8. 단축키
+\`Ctrl/⌘ + K\` 명령 팔레트 · \`Ctrl/⌘ + N\` 새 문서 · \`1\`~\`7\` 화면 이동 · \`Esc\` 닫기.`,
   },
 ];
 
-// Graph edges (source -> target, weight 1..3) — seed for the Knowledge Graph view.
-export const EDGES = [
-  ['d-transformer', 'd-attention', 3], ['d-transformer', 'd-llm', 2], ['d-transformer', 'd-moe', 2],
-  ['d-attention', 'd-llm', 1], ['d-llm', 'd-finetune', 2], ['d-llm', 'd-eval', 2], ['d-llm', 'd-quant', 1],
-  ['d-llm', 'd-scaling', 1], ['d-rag', 'd-vectordb', 3], ['d-rag', 'd-embedding', 3], ['d-rag', 'd-agent', 1],
-  ['d-vectordb', 'd-embedding', 2], ['d-embedding', 'd-llm', 1], ['d-finetune', 'd-quant', 2],
-  ['d-agent', 'd-prompt', 2], ['d-agent', 'd-llm', 2], ['d-prompt', 'd-eval', 1], ['d-moe', 'd-llm', 2],
-  ['d-prompt', 'd-finetune', 1], ['d-agent', 'd-rag', 2],
-];
-
-export const ACTIVITY = [
-  { type: 'ai', icon: 'sparkles', text: 'AI가 <b>RAG 파이프라인 설계</b>에 3개 태그를 생성했습니다', meta: 'rag · retrieval · vector-db', time: '2분 전' },
-  { type: 'link', icon: 'link', text: '<b>Attention</b> ↔ <b>Mixture of Experts</b> 연결이 추천되었습니다', meta: '연결 강도 0.82', time: '18분 전' },
-  { type: 'doc', icon: 'doc', text: '<b>LLM Scaling Laws 정리</b> 문서를 편집했습니다', meta: '+412 단어', time: '1시간 전' },
-  { type: 'ai', icon: 'sparkles', text: 'AI 요약이 <b>Vector DB 비교</b>에 추가되었습니다', meta: 'Gemini Flash', time: '어제' },
-  { type: 'workflow', icon: 'workflow', text: '워크플로우 <b>On Document Created</b>가 실행되었습니다', meta: '4 actions · 성공', time: '어제' },
-];
-
-// Phase 5 — starter workflow definitions (real, executable by the engine).
+// ---- Phase 5 starter workflows (real, executable by the engine) ----------
 // Seeded disabled so launching the app never fires AI calls unexpectedly;
 // toggle one on, or use "지금 실행" to test against a chosen document.
 export const SEED_WORKFLOWS = [
@@ -222,22 +128,6 @@ export const SEED_WORKFLOWS = [
     actions: [{ id: 'wf-digest-a1', type: 'CallAI', config: { prompt: '최근 작성한 문서들의 핵심을 한국어로 정리해줘.' } }],
     stats: { runs: 0, success: 0, lastRun: null },
   },
-];
-
-export const WORKFLOW_RUNS = [
-  { name: 'Auto-organize new docs', trigger: 'DocumentCreated', actions: 4, status: 'success', last: '2분 전', runs: 142 },
-  { name: 'Daily research digest', trigger: 'DailySchedule', actions: 3, status: 'success', last: '오늘 09:00', runs: 38 },
-  { name: 'Paper → Summary + Tags', trigger: 'TagAdded', actions: 5, status: 'running', last: '실행 중', runs: 67 },
-  { name: 'Git sync on update', trigger: 'DocumentUpdated', actions: 2, status: 'idle', last: '1시간 전', runs: 512 },
-];
-
-// Vanity stats. Documents + Tags are recomputed live from the store; the
-// rest stay as seed numbers (those subsystems arrive in later phases).
-export const STATS = [
-  { key: 'documents', label: 'Documents', value: '248', delta: '+12', icon: 'doc' },
-  { key: 'connections', label: 'Connections', value: '1,204', delta: '+47', icon: 'link' },
-  { key: 'ai', label: 'AI Actions', value: '3,891', delta: '+218', icon: 'sparkles' },
-  { key: 'tags', label: 'Tags', value: '86', delta: '+5', icon: 'hash' },
 ];
 
 export const NAV = [

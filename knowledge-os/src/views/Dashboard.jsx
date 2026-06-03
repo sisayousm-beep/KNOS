@@ -1,7 +1,11 @@
-// Knowledge OS — Dashboard view
+// Knowledge OS — Dashboard view (live data: store + workflows + plugins)
 import { Icon } from '../icons.jsx';
-import { ACTIVITY, WORKFLOW_RUNS, STATS } from '../data.js';
 import { useDocs } from '../store.jsx';
+import { useWorkflows } from '../workflow.jsx';
+import { usePlugins } from '../plugins.jsx';
+import { relativeTime } from '../util.js';
+
+const LEVEL_COLOR = { info: 'var(--text-tertiary)', blocked: '#e5a23d', error: '#e5484d' };
 
 function StatCard({ s, dense }) {
   return (
@@ -12,28 +16,31 @@ function StatCard({ s, dense }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: dense ? 6 : 12 }}>
         <span style={{ fontSize: dense ? '22px' : '30px', fontWeight: 600, letterSpacing: '-0.02em', fontFamily: 'var(--font-mono)' }}>{s.value}</span>
-        {s.delta && <span className="badge badge-success" style={{ height: 18 }}><Icon name="arrowUp" size={10} />{s.delta}</span>}
       </div>
     </div>
   );
 }
 
+// One line of the real plugin hook-activity log.
 function ActivityItem({ a, dense }) {
-  const color = a.type === 'ai' ? 'var(--accent)' : a.type === 'link' ? 'var(--info)' : 'var(--text-tertiary)';
+  const color = LEVEL_COLOR[a.level] || 'var(--text-tertiary)';
   return (
     <div className="list-row" style={{ alignItems: 'flex-start', padding: dense ? '7px 8px' : '11px 10px' }}>
-      <div style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center', flex: 'none', background: a.type === 'ai' ? 'var(--accent-bg)' : 'var(--surface-secondary)', color, marginTop: 1 }}>
-        <Icon name={a.icon} size={14} />
+      <div style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center', flex: 'none', background: 'var(--surface-secondary)', color, marginTop: 1 }}>
+        <Icon name={a.level === 'info' ? 'plugin' : 'bolt'} size={14} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', lineHeight: 1.5 }}
-          dangerouslySetInnerHTML={{ __html: a.text.replace(/<b>/g, '<b style="color:var(--text-primary);font-weight:550">') }} />
-        <div style={{ display: 'flex', gap: 8, marginTop: 3, fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-          <span>{a.meta}</span><span>·</span><span>{a.time}</span>
+        <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <b style={{ color: 'var(--text-primary)', fontWeight: 550 }}>{a.plugin}</b> {a.detail}
         </div>
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>{relativeTime(new Date(a.at).toISOString())}</div>
       </div>
     </div>
   );
+}
+
+function EmptyRow({ text }) {
+  return <div style={{ padding: '16px 12px', fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>{text}</div>;
 }
 
 function DocRow({ d, dense, onOpen }) {
@@ -43,7 +50,6 @@ function DocRow({ d, dense, onOpen }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-primary)', fontWeight: 450, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.title}</span>
-          {d.ai && <span className="badge badge-accent" style={{ height: 16, padding: '0 6px', flex: 'none' }}><span className="dot"></span>AI</span>}
           {d.draft && <span className="badge badge-warning" style={{ height: 16, padding: '0 6px', flex: 'none' }}>Draft</span>}
         </div>
         {!dense && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.excerpt}</div>}
@@ -57,36 +63,42 @@ function DocRow({ d, dense, onOpen }) {
   );
 }
 
+// One real workflow run record.
 function WorkflowStatus({ w }) {
-  const dot = w.status === 'success' ? 'var(--success)' : w.status === 'running' ? 'var(--accent)' : 'var(--text-tertiary)';
+  const dot = w.ok ? 'var(--success)' : '#e5484d';
   return (
     <div className="list-row" style={{ padding: '9px 10px' }}>
-      <span style={{ width: 7, height: 7, borderRadius: '50%', background: dot, flex: 'none', boxShadow: w.status === 'running' ? '0 0 8px var(--accent)' : 'none' }}></span>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: dot, flex: 'none' }}></span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-primary)', fontWeight: 450, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</div>
-        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{w.trigger} · {w.actions} actions</div>
+        <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-primary)', fontWeight: 450, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.workflowName}</div>
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{w.trigger} · {w.steps.length} actions</div>
       </div>
-      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', flex: 'none' }}>{w.last}</span>
+      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', flex: 'none' }}>{relativeTime(w.at)}</span>
     </div>
   );
 }
 
 export default function Dashboard({ density = 'spacious', onOpen, onNav, onNew }) {
   const { docs } = useDocs();
+  const { runs } = useWorkflows();
+  const { activity } = usePlugins();
   const dense = density === 'dense';
   const gap = dense ? 12 : 20;
   const recents = docs.slice(0, dense ? 8 : 6);
 
-  // Live tag counts derived from real documents.
+  // Everything below is derived live from the real document set.
   const tagCounts = {};
   docs.forEach((d) => d.tags.forEach((t) => { tagCounts[t] = (tagCounts[t] || 0) + 1; }));
   const topTags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
 
-  const stats = STATS.map((s) => {
-    if (s.key === 'documents') return { ...s, value: String(docs.length), delta: null };
-    if (s.key === 'tags') return { ...s, value: String(Object.keys(tagCounts).length), delta: null };
-    return s;
-  });
+  const totalLinks = docs.reduce((n, d) => n + d.outgoing.length, 0);
+  const totalWords = docs.reduce((n, d) => n + d.words, 0);
+  const stats = [
+    { label: '문서', value: String(docs.length), icon: 'doc' },
+    { label: '링크', value: String(totalLinks), icon: 'link' },
+    { label: '태그', value: String(Object.keys(tagCounts).length), icon: 'hash' },
+    { label: '단어', value: totalWords.toLocaleString(), icon: 'sparkles' },
+  ];
 
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 
@@ -120,7 +132,8 @@ export default function Dashboard({ density = 'spacious', onOpen, onNav, onNew }
             <button className="btn btn-ghost btn-sm" onClick={() => onNav && onNav('search')}>전체 보기<Icon name="chevR" size={12} /></button>
           </div>
           <div style={{ padding: '4px 6px' }}>
-            {recents.map((d) => <DocRow key={d.id} d={d} dense={dense} onOpen={onOpen} />)}
+            {recents.length ? recents.map((d) => <DocRow key={d.id} d={d} dense={dense} onOpen={onOpen} />)
+              : <EmptyRow text="아직 문서가 없습니다. New Document 로 시작하세요." />}
           </div>
         </div>
 
@@ -129,12 +142,13 @@ export default function Dashboard({ density = 'spacious', onOpen, onNav, onNew }
             <div className="kos-panel-head">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)' }}></span>
-                <span style={{ fontSize: 'var(--text-md)', fontWeight: 600 }}>AI Activity</span>
+                <span style={{ fontSize: 'var(--text-md)', fontWeight: 600 }}>플러그인 활동</span>
               </div>
-              <span className="badge badge-accent" style={{ height: 18 }}>Live</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => onNav && onNav('plugins')}>관리<Icon name="chevR" size={12} /></button>
             </div>
             <div style={{ padding: '4px 6px' }}>
-              {ACTIVITY.slice(0, dense ? 5 : 4).map((a, i) => <ActivityItem key={i} a={a} dense={dense} />)}
+              {activity.length ? activity.slice(0, dense ? 5 : 4).map((a) => <ActivityItem key={a.id} a={a} dense={dense} />)
+                : <EmptyRow text="훅 이벤트가 여기에 표시됩니다. 문서를 만들거나 검색해 보세요." />}
             </div>
           </div>
 
@@ -147,7 +161,8 @@ export default function Dashboard({ density = 'spacious', onOpen, onNav, onNew }
               <button className="btn btn-ghost btn-sm" onClick={() => onNav && onNav('workflow')}>관리<Icon name="chevR" size={12} /></button>
             </div>
             <div style={{ padding: '4px 6px' }}>
-              {WORKFLOW_RUNS.map((w, i) => <WorkflowStatus key={i} w={w} />)}
+              {runs.length ? runs.slice(0, 4).map((w) => <WorkflowStatus key={w.id} w={w} />)
+                : <EmptyRow text="실행 기록이 없습니다. Workflow Builder 에서 '지금 실행'으로 시작하세요." />}
             </div>
           </div>
         </div>

@@ -24,3 +24,7 @@ Thumbs.db
 .env.*
 *.pem
 *.key
+
+# Private worldbuilding (local only — generated from 세계관/ by scripts/import-worldbuilding.mjs)
+세계관/
+**/seed-worldbuilding.local.js
