@@ -8,9 +8,9 @@ import { SEED_DOCS } from './data.js';
 import { uid, relativeTime, wordCount, excerpt } from './util.js';
 import { wikiLinks } from './markdown.js';
 
-// v2: dropped the example/research dummy docs; first run now seeds the
-// manuals + worldbuilding imported from 세계관/ (see scripts/import-worldbuilding.mjs).
-const KEY = 'logia.docs.v2';
+// v3: worldbuilding re-import — graph-connected (hubs + 800-year timeline
+// bridge, links normalized) and AI roleplay 모드 docs removed.
+const KEY = 'logia.docs.v3';
 
 // Worldbuilding seed is generated locally and gitignored, so it may be absent
 // on a fresh clone — import.meta.glob resolves to {} in that case (no error).
