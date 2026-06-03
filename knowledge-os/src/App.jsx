@@ -1,7 +1,7 @@
 // ============================================================
 // Knowledge OS — App shell (sidebar, topbar, command palette, routing)
 // ============================================================
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Icon } from './icons.jsx';
 import { NAV } from './data.js';
 import { useDocs } from './store.jsx';
@@ -83,9 +83,71 @@ function CommandPalette({ open, onClose, onNav, onOpen, onNew }) {
   );
 }
 
-function Sidebar({ view, onNav, collapsed, onToggle, onNew }) {
+// Collapsible document explorer: groups every document by its tags
+// (project → category) so the whole knowledge base is visible at a glance.
+function DocTree({ onOpen }) {
   const { docs } = useDocs();
-  const favorites = docs.filter((d) => d.starred || d.links > 2).slice(0, 4);
+  const [open, setOpen] = useState({});
+  const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
+
+  const groups = useMemo(() => {
+    const g = {};
+    docs.forEach((d) => {
+      const top = (d.tags && d.tags[0]) || '기타';
+      const sub = (d.tags && d.tags[1]) || '일반';
+      ((g[top] ||= {})[sub] ||= []).push(d);
+    });
+    return g;
+  }, [docs]);
+
+  const topNames = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'ko'));
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div className="section-label" style={{ padding: '14px 10px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Icon name="folder" size={12} style={{ color: 'var(--text-tertiary)' }} />문서 ({docs.length})
+      </div>
+      {topNames.map((top) => {
+        const subs = groups[top];
+        const count = Object.values(subs).reduce((n, arr) => n + arr.length, 0);
+        const isOpen = open[top];
+        return (
+          <div key={top}>
+            <div className="list-row" onClick={() => toggle(top)} title={top}
+              style={{ padding: '6px 8px', marginBottom: 1, color: 'var(--text-secondary)' }}>
+              <Icon name={isOpen ? 'chevD' : 'chevR'} size={12} style={{ color: 'var(--text-tertiary)', flex: 'none' }} />
+              <span style={{ flex: 1, fontSize: 'var(--text-base)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{top}</span>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', flex: 'none' }}>{count}</span>
+            </div>
+            {isOpen && Object.keys(subs).sort((a, b) => a.localeCompare(b, 'ko')).map((sub) => {
+              const key = top + '/' + sub;
+              const subOpen = open[key];
+              return (
+                <div key={key}>
+                  <div className="list-row" onClick={() => toggle(key)} title={sub}
+                    style={{ padding: '5px 8px 5px 20px', marginBottom: 1 }}>
+                    <Icon name={subOpen ? 'chevD' : 'chevR'} size={11} style={{ color: 'var(--text-tertiary)', flex: 'none' }} />
+                    <span style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</span>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', flex: 'none' }}>{subs[sub].length}</span>
+                  </div>
+                  {subOpen && subs[sub].map((d) => (
+                    <div key={d.id} className="list-row" onClick={() => onOpen(d)} title={d.title}
+                      style={{ padding: '5px 8px 5px 34px', marginBottom: 1 }}>
+                      <Icon name="doc" size={12} style={{ color: 'var(--text-tertiary)', flex: 'none' }} />
+                      <span style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.title}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Sidebar({ view, onNav, collapsed, onToggle, onNew }) {
   return (
     <aside style={{ width: collapsed ? 'var(--sidebar-w-collapsed)' : 'var(--sidebar-w)', flex: 'none', borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column', transition: 'width var(--dur) var(--ease)' }}>
       <div style={{ height: 'var(--topbar-h)', display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', borderBottom: '1px solid var(--border-subtle)' }}>
@@ -118,15 +180,7 @@ function Sidebar({ view, onNav, collapsed, onToggle, onNew }) {
           );
         })}
 
-        {!collapsed && favorites.length > 0 && <>
-          <div className="section-label" style={{ padding: '16px 10px 8px' }}>Favorites</div>
-          {favorites.map((d) => (
-            <div key={d.id} className="list-row" style={{ padding: '7px 10px' }} onClick={() => onNav({ open: d })}>
-              <Icon name="doc" size={14} style={{ color: 'var(--text-tertiary)', flex: 'none' }} />
-              <span style={{ flex: 1, fontSize: 'var(--text-base)', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.title}</span>
-            </div>
-          ))}
-        </>}
+        {!collapsed && <DocTree onOpen={(d) => onNav({ open: d })} />}
       </nav>
 
       <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '10px', display: 'flex', alignItems: 'center', gap: 10 }}>

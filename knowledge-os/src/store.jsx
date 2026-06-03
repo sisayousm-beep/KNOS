@@ -8,9 +8,9 @@ import { SEED_DOCS } from './data.js';
 import { uid, relativeTime, wordCount, excerpt } from './util.js';
 import { wikiLinks } from './markdown.js';
 
-// v3: worldbuilding re-import — graph-connected (hubs + 800-year timeline
-// bridge, links normalized) and AI roleplay 모드 docs removed.
-const KEY = 'logia.docs.v3';
+// v4: integration layer — 5 synthesis docs + connective passages woven into
+// pivotal docs ("세계의 맥락"), tying the two eras into one world.
+const KEY = 'logia.docs.v4';
 
 // Worldbuilding seed is generated locally and gitignored, so it may be absent
 // on a fresh clone — import.meta.glob resolves to {} in that case (no error).

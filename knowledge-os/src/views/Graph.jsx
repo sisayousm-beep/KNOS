@@ -36,10 +36,33 @@ export default function KnowledgeGraph({ layout = 'force', onOpen }) {
   const [, force] = useState(0);
   const [size, setSize] = useState({ w: 900, h: 640 });
   const [hover, setHover] = useState(null);
-  const [sel, setSel] = useState('d-transformer');
+  const [sel, setSel] = useState('');
   const [zoom, setZoom] = useState(1);
   const dragRef = useRef(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+
+  // Latest view state for the native wheel handler (avoids stale closures).
+  const viewRef = useRef();
+  viewRef.current = { zoom, pan, size };
+
+  // Mouse-wheel zoom, centred on the cursor. Native listener so we can
+  // preventDefault (React's onWheel is passive and can't).
+  useEffect(() => {
+    const el = wrapRef.current; if (!el) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      const { zoom, pan, size } = viewRef.current;
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const cx = size.w / 2 + pan.x, cy = size.h / 2 + pan.y;
+      const z2 = Math.min(2.6, Math.max(0.4, zoom * Math.exp(-e.deltaY * 0.0015)));
+      const gx = (mx - cx) / zoom, gy = (my - cy) / zoom; // graph point under cursor
+      setPan({ x: (mx - z2 * gx) - size.w / 2, y: (my - z2 * gy) - size.h / 2 });
+      setZoom(z2);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   useEffect(() => {
     const p = {};
@@ -208,7 +231,7 @@ export default function KnowledgeGraph({ layout = 'force', onOpen }) {
             </span>
           ))}
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 14 }}>
-            {layout} layout · drag · zoom →
+            {layout} layout · 휠 줌 · 드래그
           </span>
         </div>
       </div>
