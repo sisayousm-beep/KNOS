@@ -45,6 +45,11 @@ export default function KnowledgeGraph({ layout = 'force', onOpen }) {
   const viewRef = useRef();
   viewRef.current = { zoom, pan, size };
 
+  // Simulation "heat": decays to 0 so the graph settles instead of jittering
+  // forever; kickRef() re-heats it on interaction.
+  const alphaRef = useRef(1);
+  const kickRef = useRef(null);
+
   // Mouse-wheel zoom, centred on the cursor. Native listener so we can
   // preventDefault (React's onWheel is passive and can't).
   useEffect(() => {
@@ -66,9 +71,12 @@ export default function KnowledgeGraph({ layout = 'force', onOpen }) {
 
   useEffect(() => {
     const p = {};
+    // Start spread proportional to node count so a large graph doesn't begin
+    // as a dense ball and then explode outward.
+    const R0 = Math.max(220, nodes.length * 3.4);
     nodes.forEach((n, i) => {
       const a = (i / nodes.length) * Math.PI * 2;
-      p[n.id] = { x: Math.cos(a) * 180 + (Math.random() - 0.5) * 40, y: Math.sin(a) * 180 + (Math.random() - 0.5) * 40, vx: 0, vy: 0 };
+      p[n.id] = { x: Math.cos(a) * R0 + (Math.random() - 0.5) * 40, y: Math.sin(a) * R0 + (Math.random() - 0.5) * 40, vx: 0, vy: 0 };
     });
     posRef.current = p;
     force((v) => v + 1);
@@ -92,20 +100,36 @@ export default function KnowledgeGraph({ layout = 'force', onOpen }) {
     return d;
   }, [sel, nodes, adj]);
 
+  // Fresh sel/dist for the (non-reheating) physics loop, so selecting a node
+  // only re-highlights — it doesn't restart the whole simulation.
+  const selRef = useRef(sel); selRef.current = sel;
+  const distRef = useRef(dist); distRef.current = dist;
+  // Radial layout reorganizes rings around the selection, so reheat there.
+  useEffect(() => { if (layout === 'radial') kickRef.current?.(); }, [sel, layout]);
+
   useEffect(() => {
-    let raf; let alpha = 1;
     const tags = [...new Set(nodes.map((n) => n.tag))];
     const clusterCenter = {};
-    tags.forEach((t, i) => { const a = (i / tags.length) * Math.PI * 2; clusterCenter[t] = { x: Math.cos(a) * 230, y: Math.sin(a) * 230 }; });
+    tags.forEach((t, i) => { const a = (i / tags.length) * Math.PI * 2; clusterCenter[t] = { x: Math.cos(a) * 260, y: Math.sin(a) * 260 }; });
 
+    // Repulsion grows with node count, springs are longer, and velocity is
+    // capped — so a large, link-dense graph spreads out and moves calmly
+    // instead of collapsing into a tight, violently jittering ball.
+    const n = nodes.length || 1;
+    const REP = (layout === 'cluster' ? 1800 : 3000) * (0.6 + n / 90);
+    const SPRING = layout === 'radial' ? 80 : 132;
+    const DAMP = 0.8, MAXV = 16;
+
+    let raf = null;
     function step() {
       const p = posRef.current;
       const ns = nodes;
+      const sel = selRef.current, dist = distRef.current;
       for (let i = 0; i < ns.length; i++) {
         for (let j = i + 1; j < ns.length; j++) {
           const a = p[ns[i].id], b = p[ns[j].id]; if (!a || !b) continue;
           const dx = a.x - b.x, dy = a.y - b.y; const d2 = dx * dx + dy * dy || 0.01; const d = Math.sqrt(d2);
-          const rep = (layout === 'cluster' ? 900 : 1600) / d2;
+          const rep = REP / d2;
           const fx = dx / d * rep, fy = dy / d * rep;
           a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
         }
@@ -113,41 +137,52 @@ export default function KnowledgeGraph({ layout = 'force', onOpen }) {
       edges.forEach(([s, t, w]) => {
         const a = p[s], b = p[t]; if (!a || !b) return;
         const dx = b.x - a.x, dy = b.y - a.y; const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
-        const target = layout === 'radial' ? 70 : 110;
-        const k = 0.02 * (w || 1); const f = (d - target) * k;
+        const k = 0.018 * (w || 1); const f = (d - SPRING) * k;
         const fx = dx / d * f, fy = dy / d * f;
         a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
       });
-      ns.forEach((n) => {
-        const a = p[n.id]; if (!a) return;
-        if (layout === 'force') { a.vx += (0 - a.x) * 0.004; a.vy += (0 - a.y) * 0.004; }
-        else if (layout === 'cluster') { const c = clusterCenter[n.tag] || { x: 0, y: 0 }; a.vx += (c.x - a.x) * 0.02; a.vy += (c.y - a.y) * 0.02; }
+      ns.forEach((nd) => {
+        const a = p[nd.id]; if (!a) return;
+        if (layout === 'force') { a.vx += (0 - a.x) * 0.003; a.vy += (0 - a.y) * 0.003; }
+        else if (layout === 'cluster') { const c = clusterCenter[nd.tag] || { x: 0, y: 0 }; a.vx += (c.x - a.x) * 0.02; a.vy += (c.y - a.y) * 0.02; }
         else if (layout === 'radial') {
-          const ring = dist[n.id] === Infinity ? 4 : dist[n.id];
-          const R = ring * 120;
+          const ring = dist[nd.id] === undefined || dist[nd.id] === Infinity ? 4 : dist[nd.id];
+          const R = ring * 130;
           const cur = Math.atan2(a.y, a.x);
-          const tx = Math.cos(cur) * R, ty = Math.sin(cur) * R;
-          a.vx += (tx - a.x) * 0.05; a.vy += (ty - a.y) * 0.05;
-          if (n.id === sel) { a.vx += (0 - a.x) * 0.2; a.vy += (0 - a.y) * 0.2; }
+          a.vx += (Math.cos(cur) * R - a.x) * 0.05; a.vy += (Math.sin(cur) * R - a.y) * 0.05;
+          if (nd.id === sel) { a.vx += (0 - a.x) * 0.2; a.vy += (0 - a.y) * 0.2; }
         }
       });
-      ns.forEach((n) => {
-        const a = p[n.id]; if (!a) return;
-        if (dragRef.current === n.id) { a.vx = 0; a.vy = 0; return; }
-        a.vx *= 0.82; a.vy *= 0.82;
+      const alpha = alphaRef.current;
+      ns.forEach((nd) => {
+        const a = p[nd.id]; if (!a) return;
+        if (dragRef.current === nd.id) { a.vx = 0; a.vy = 0; return; }
+        a.vx *= DAMP; a.vy *= DAMP;
+        const sp = Math.hypot(a.vx, a.vy);
+        if (sp > MAXV) { a.vx = a.vx / sp * MAXV; a.vy = a.vy / sp * MAXV; }
         a.x += a.vx * alpha; a.y += a.vy * alpha;
       });
-      alpha *= 0.99; if (alpha < 0.06) alpha = 0.06;
       force((v) => v + 1);
-      raf = requestAnimationFrame(step);
     }
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [layout, size.w, size.h, dist, sel, nodes, edges]);
+
+    function loop() {
+      step();
+      if (dragRef.current) alphaRef.current = Math.max(alphaRef.current, 0.5); // stay lively while dragging
+      alphaRef.current *= 0.97;
+      if (alphaRef.current > 0.02) raf = requestAnimationFrame(loop);
+      else raf = null; // settled — stop animating (no perpetual jitter)
+    }
+    kickRef.current = () => { alphaRef.current = Math.max(alphaRef.current, 0.7); if (!raf) raf = requestAnimationFrame(loop); };
+
+    alphaRef.current = 1;
+    raf = requestAnimationFrame(loop);
+    return () => { if (raf) cancelAnimationFrame(raf); kickRef.current = null; };
+  }, [layout, size.w, size.h, nodes, edges]);
 
   function onPointerDown(e, id) {
     e.stopPropagation();
     dragRef.current = id;
+    kickRef.current?.(); // wake the simulation so neighbours respond to the drag
     const move = (ev) => {
       const rect = wrapRef.current.getBoundingClientRect();
       const x = (ev.clientX - rect.left - size.w / 2 - pan.x) / zoom;

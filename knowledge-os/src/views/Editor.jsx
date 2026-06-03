@@ -21,7 +21,7 @@ export default function DocumentEditor({ docId, onOpen, onNew, onNav }) {
   const [content, setContent] = useState('');
   const [tags, setTags] = useState([]);
   const [tagDraft, setTagDraft] = useState('');
-  const [mode, setMode] = useState('write');
+  const [mode, setMode] = useState('preview');
   const [status, setStatus] = useState('saved');
   const [aiBusy, setAiBusy] = useState(null);   // 'summary' | 'tags' | null
   const [summary, setSummary] = useState(null);  // { text, source }
@@ -36,7 +36,7 @@ export default function DocumentEditor({ docId, onOpen, onNew, onNav }) {
       setTitle(doc.title);
       setContent(doc.content);
       setTags(doc.tags);
-      setMode('write');
+      setMode('preview');
       setStatus('saved');
       setSummary(null);
       setAiMsg('');
