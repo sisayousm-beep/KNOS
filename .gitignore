@@ -27,4 +27,5 @@ Thumbs.db
 
 # Private worldbuilding (local only — generated from 세계관/ by scripts/import-worldbuilding.mjs)
 세계관/
+세계관_원본_백업/
 **/seed-worldbuilding.local.js

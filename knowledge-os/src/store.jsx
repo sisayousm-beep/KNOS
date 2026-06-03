@@ -8,9 +8,9 @@ import { SEED_DOCS } from './data.js';
 import { uid, relativeTime, wordCount, excerpt } from './util.js';
 import { wikiLinks } from './markdown.js';
 
-// v4: integration layer — 5 synthesis docs + connective passages woven into
-// pivotal docs ("세계의 맥락"), tying the two eras into one world.
-const KEY = 'logia.docs.v4';
+// v5: full reorganization — 세계관 rebuilt into one world under a thematic
+// 분류/시대 taxonomy with a 00_정전 canon codex; per-분류 색인 docs connect it.
+const KEY = 'logia.docs.v5';
 
 // Worldbuilding seed is generated locally and gitignored, so it may be absent
 // on a fresh clone — import.meta.glob resolves to {} in that case (no error).
